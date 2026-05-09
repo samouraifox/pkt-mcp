@@ -95,7 +95,11 @@ can keep probing PT's API surface from Python without re-loading the listener.
 
 - `BAD_ARGS` — missing field or unknown `type` enum
 - `PT_REJECTED` — `addDevice` returned `""` (the M1 model-rejection quirk)
-- `PT_REJECTED` — `name` collides with an existing device
+- `PT_REJECTED` — `name` collides with an existing device. `error_data` is
+  `{ "existing_uuid": "<uuid>"|null }` so callers can decide whether to
+  delete-then-add. The JS layer **does not** auto-rename — failing loud on
+  collision is the default; PT's silent `R1 → R1-1` rename would desync any
+  caller-side name cache.
 
 **Notes**
 
@@ -245,7 +249,11 @@ can keep probing PT's API surface from Python without re-loading the listener.
 **Input**
 
 ```json
-{ "device": "<name>", "command": "<single shell/IOS line, no embedded \\n>" }
+{
+  "device":   "<name>",
+  "command":  "<single shell/IOS line, no embedded \\n>",
+  "terminal": "ios" | "desktop"
+}
 ```
 
 **Output**
@@ -260,13 +268,24 @@ can keep probing PT's API surface from Python without re-loading the listener.
 
 **Failure modes**
 
-- `PT_NOT_FOUND` — no device with that name
-- `BAD_ARGS` — multi-line command (split caller-side)
+- `PT_NOT_FOUND` — no device with that name, **or** the device doesn't
+  expose the requested terminal (e.g. `terminal:"desktop"` on a router,
+  `terminal:"ios"` on a PC)
+- `BAD_ARGS` — multi-line command, missing `terminal`, or `terminal` not in
+  `{"ios", "desktop"}`
 
 **Notes**
 
-- The handler dispatches on device kind: `PC.getCommandPrompt()` for hosts,
-  `Device.getCommandLine()` for IOS gear. Same `TerminalLine` type either way.
+- The JS API does NOT infer terminal kind from device type. `terminal:"ios"`
+  uses `Device.getCommandLine()`; `terminal:"desktop"` uses
+  `Pc.getCommandPrompt()`. One job, fail-fast — calling the wrong one for a
+  given device raises `PT_NOT_FOUND`. This is deliberate: the JS surface
+  stays predictable, and ergonomics live in the Python client.
+- The Python client (`Bridge.run_command(device, command)`) hides this from
+  callers — it caches `device → type` at `add_device` time and auto-fills
+  `terminal` based on type ("ios" for routers/switches/IOS gear, "desktop"
+  for hosts). Power-user override: `Bridge.run_command(..., terminal="ios")`
+  passes through.
 - M5 pacing rule still applies. One logical line per call. The op
   intentionally does NOT chain commands; that's the caller's loop.
 - For long-running output (e.g. `ping`), the conventional pattern is a

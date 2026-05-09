@@ -183,8 +183,21 @@ function op_add_device(args, done) {
             { allowed: Object.keys(DEVICE_TYPES) });
     }
 
-    if (findDeviceByName(name)) {
-        throw err("PT_REJECTED", "device name already exists: " + name);
+    var existing = findDeviceByName(name);
+    if (existing) {
+        // Fail loud on name collision rather than letting PT auto-rename
+        // (R1 → R1-1, etc.) — quiet rename would desync the MCP layer's
+        // name cache. Callers who want auto-rename can delete-then-add.
+        var existingUuid = null;
+        if (typeof existing.getUuid === "function") {
+            try { existingUuid = String(existing.getUuid()); } catch (e) {}
+        } else if (typeof existing.getObjectUuid === "function") {
+            try { existingUuid = String(existing.getObjectUuid()); } catch (e) {}
+        } else if (typeof existing.getId === "function") {
+            try { existingUuid = String(existing.getId()); } catch (e) {}
+        }
+        throw err("PT_REJECTED", "device name already exists: " + name,
+            { existing_uuid: existingUuid });
     }
 
     var uuid = lw().addDevice(typeInt, model, x, y);
@@ -355,25 +368,40 @@ function op_configure_host(args) {
 }
 
 function op_run_command(args) {
-    var name = requireArg(args, "device",  "string");
-    var cmd  = requireArg(args, "command", "string");
+    var name     = requireArg(args, "device",   "string");
+    var cmd      = requireArg(args, "command",  "string");
+    var terminal = requireArg(args, "terminal", "string");
     if (cmd.indexOf("\n") >= 0) {
         throw err("BAD_ARGS", "command must be a single line (no embedded newline)");
     }
+    if (terminal !== "ios" && terminal !== "desktop") {
+        throw err("BAD_ARGS",
+            "terminal must be \"ios\" or \"desktop\", got " + JSON.stringify(terminal),
+            { allowed: ["ios", "desktop"] });
+    }
 
     var dev = requireDevice(name);
-
-    // Hosts (PC/Laptop): desktop Command Prompt. IOS gear: console line.
-    // Pc.getCommandPrompt is the host-only method; fall back to
-    // Device.getCommandLine for everything else.
     var tl = null;
-    if (typeof dev.getCommandPrompt === "function") {
-        try { tl = dev.getCommandPrompt(); } catch (e) { tl = null; }
+    if (terminal === "desktop") {
+        if (typeof dev.getCommandPrompt !== "function") {
+            throw err("PT_NOT_FOUND",
+                "device has no desktop Command Prompt: " + name +
+                " (terminal:\"desktop\" requires a host like PC/Laptop)");
+        }
+        tl = dev.getCommandPrompt();
+    } else {
+        if (typeof dev.getCommandLine !== "function") {
+            throw err("PT_NOT_FOUND",
+                "device has no IOS console line: " + name +
+                " (terminal:\"ios\" requires routers/switches/IOS gear)");
+        }
+        tl = dev.getCommandLine();
     }
-    if (!tl && typeof dev.getCommandLine === "function") {
-        try { tl = dev.getCommandLine(); } catch (e) { tl = null; }
+    if (!tl) {
+        throw err("PT_NOT_FOUND",
+            "terminal accessor returned null on device: " + name +
+            " (terminal=" + terminal + ")");
     }
-    if (!tl) throw err("PT_NOT_FOUND", "no terminal accessor on device: " + name);
 
     tl.enterCommand(cmd);
     return {
