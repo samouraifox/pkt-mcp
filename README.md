@@ -2,8 +2,9 @@
 
 MCP server that builds Cisco Packet Tracer networks from PDF requirements.
 
-**Status:** Phase 1 done — Script Module path validated end-to-end (see
-`docs/phase1-investigation.md`). Phase 2 not started.
+**Status:** Phases 1–3 done. Phase 4 (FastMCP wrapper) in progress —
+the MCP server scaffolding lives in `pkt_mcp/` and is registered with
+Claude Code per the section below.
 
 ## Architecture
 
@@ -32,20 +33,69 @@ branch [`phase1-spike-failed`](https://github.com/samouraifox/pkt-mcp/tree/phase
 - The `pkt-mcp` Script Module loaded into PT (one-time GUI step, see
   `pt-script-module/INSTALL.md`)
 
+## Setup
+
+```
+git clone https://github.com/samouraifox/pkt-mcp
+cd pkt-mcp
+uv sync
+```
+
+`uv sync` creates the `.venv` and installs `mcp[cli]`. The Script Module
+must be loaded inside PT separately (`pt-script-module/INSTALL.md`).
+
+## Register with Claude Code
+
+Add the entry below to your `~/.claude.json`, replacing
+`<ABSOLUTE_PATH_TO_REPO>` with the absolute path you cloned to. The MCP
+server runs over stdio — Claude Code spawns it on demand via `uv run`, so
+no daemon, no port to manage.
+
+```json
+{
+  "mcpServers": {
+    "pkt-mcp": {
+      "type": "stdio",
+      "command": "uv",
+      "args": ["run", "--directory", "<ABSOLUTE_PATH_TO_REPO>",
+               "python", "-m", "pkt_mcp.server"]
+    }
+  }
+}
+```
+
+The registration is global — `pkt-mcp` becomes available in every Claude
+Code session, regardless of CWD. Restart your Claude Code session for the
+change to take effect, then verify with `/mcp` (the entry should show as
+`connected`) or by calling the `ping_self` tool — it returns the literal
+string `"ok"`.
+
+`~/.claude.json` is per-user state and lives outside the repo; the
+snippet above is the source of truth that other operators (or you in
+six months) need to paste in.
+
 ## Repo layout
 
 ```
 pkt-mcp/
 ├── README.md
 ├── LICENSE
+├── pyproject.toml                 ← uv-managed, mcp[cli] dependency
 ├── docs/
 │   ├── architecture.md            ← canonical architecture + pivot rationale
-│   └── phase1-investigation.md    ← every path tried, every dead end, every finding
+│   ├── phase1-investigation.md    ← every path tried, every dead end, every finding
+│   ├── phase2-api-map.md          ← in-PT JS API surface as we discovered it
+│   └── phase3-protocol.md         ← typed op/args wire protocol over the mailbox
 ├── pt-script-module/
-│   ├── main.js                    ← source-of-truth Script Module body (commit)
+│   ├── main.js                    ← dispatcher (file-mailbox listener)
+│   ├── api.js                     ← op handlers (Phase 3 typed ops)
 │   └── INSTALL.md                 ← step-by-step PT GUI walkthrough
-├── pkt_mcp/                       ← Phase 4 (Python MCP server, not yet written)
-└── tests/                         ← Phase 4
+├── tools/
+│   └── pkt_bridge.py              ← Python typed Bridge client over the mailbox
+├── pkt_mcp/                       ← FastMCP server (Phase 4)
+│   └── server.py                  ← @mcp.tool() entrypoints
+└── tests/
+    └── test_smoke.py              ← M6 regression — rebuild + ping via the typed Bridge
 ```
 
 > The `.pts` file PT generates after Save/Export is a build artifact and is not
