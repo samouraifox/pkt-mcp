@@ -211,12 +211,14 @@ def connect(
                        "GigabitEthernet0/0" or "FastEthernet0/1"; PC hosts
                        use no-slash form "FastEthernet0".
         dev_b, port_b: Second endpoint, same conventions.
-        cable_type: One of "ETHERNET_STRAIGHT" (router↔switch, switch↔host;
-                    the most common case), "ETHERNET_CROSS" (same-type
-                    legacy gear: switch↔switch on old hardware),
-                    "FIBER" (fiber-optic), "SERIAL" (DTE-DCE serial),
-                    "AUTO" (let PT pick), "WIRELESS", plus the rest of
-                    the PT cable enum.
+        cable_type: One of "ETHERNET_STRAIGHT" (different device classes:
+                    router↔switch, switch↔host — the most common case),
+                    "ETHERNET_CROSS" (same device class: switch↔switch,
+                    or DTE↔DTE links like router↔router and router↔host
+                    direct), "FIBER" (fiber-optic), "SERIAL" (DTE-DCE
+                    serial), "AUTO" (let PT pick the cable based on the
+                    port pair — safe default when uncertain),
+                    "WIRELESS", plus the rest of the PT cable enum.
         auto_portfast: If True (default) AND exactly one endpoint is a
                        SWITCH AND the other is a host (PC/SERVER), the
                        switch port is automatically taken into IOS config
