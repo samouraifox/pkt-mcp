@@ -149,6 +149,83 @@ The only PT GUI step that remains is the one-time Stop/Start of the listener
 when `main.js` itself changes (which should be rare from here — the listener
 is stable code, milestone-specific JS rides through `cmd.json`).
 
-## M3..M6
+## M3 — link API + cable-type map
+
+**Status:** done. Primary deliverable (R1 G0/0 ↔ SW1 Fa0/1, copper-straight)
+created via the bridge in a single call, both port endpoints report a
+non-null `getLink()` object.
+
+The Doxygen detail page for `LogicalWorkspace::createLink` has the full
+contract — no runtime API discovery needed. Reference:
+`$PT_HOME/help/default/IpcAPI/class_logical_workspace.html`.
+
+### Working call
+
+```js
+var lw = ipc.appWindow().getActiveWorkspace().getLogicalWorkspace();
+lw.createLink(deviceName1, portName1, deviceName2, portName2, connType);
+// returns bool: true on success, false otherwise.
+```
+
+- **Device identifiers are name strings**, not handles or UUIDs. Pass `"R1"`,
+  `"SW1"`, etc — exactly what `Device.getName()` returns. Eliminates the port-
+  lookup mini-discovery the original M3 plan called for.
+- **Port names are concatenated type+index strings.** Doxygen lists the
+  accepted types: `Console`, `Aux`, `Ethernet`, `FastEthernet`,
+  `GigabitEthernet`, `Serial`, `Wireless`, `Loopback`, `Vlan`, `Modem`,
+  `Coaxial`, `Rs232`, `Async` — followed by the port index where applicable
+  (`"FastEthernet0/0"`, `"GigabitEthernet0/0"`, `"Serial0/0/0"`).
+- M3 verified call:
+  `lw.createLink("R1", "GigabitEthernet0/0", "SW1", "FastEthernet0/1", 8100)`
+  → `true`.
+- **Visual link state right after `createLink` is RED on the router end.**
+  This is not a bug — Cisco router physical interfaces default to `shutdown`,
+  so the link is admin-down until M5 sends `no shutdown`. Switch ports are
+  `no shutdown` by default; the moment R1's side comes up, both ends turn
+  green. Don't chase this in M3.
+
+### Cable-type integer table (`CONNECT_TYPES`)
+
+From the same Doxygen `connType` parameter doc — authoritative, not probed.
+
+| int  | enum                | use                                     |
+|------|---------------------|-----------------------------------------|
+| **8100** | **ETHERNET_STRAIGHT** | **copper-straight (router↔switch, switch↔host)** |
+| **8101** | **ETHERNET_CROSS**    | **copper-crossover (same-type, e.g. switch↔switch on legacy gear)** |
+| 8102 | ETHERNET_ROLL       | rollover                                |
+| **8103** | **FIBER**             | **fiber-optic**                          |
+| 8104 | PHONE               |                                         |
+| 8105 | CABLE               | coax-cable to cable modem               |
+| 8106 | SERIAL              | DTE-DCE serial                          |
+| 8107 | AUTO                | PT auto-picks the right cable for the port pair |
+| 8108 | CONSOLE             | console rollover                        |
+| 8109 | WIRELESS            | wireless association                    |
+| 8110 | COAXIAL             |                                         |
+| 8111 | OCTAL               |                                         |
+| 8112 | CELLULAR            |                                         |
+| 8113 | USB                 |                                         |
+| 8114 | CUSTOM_IO           | IoE / programmable I/O                  |
+
+### Useful port introspection (from `Device.getPort(portName)`)
+
+| method                  | returns          | use                              |
+|-------------------------|------------------|----------------------------------|
+| `getName()`             | string           | port name as canonical form      |
+| `getLink()`             | Link \| null     | non-null ⇒ port is connected     |
+| `getRemotePortName()`   | string           | other end's port name (observed empty in our test — may need a different traversal) |
+| `deleteLink()`          | void             | drop this end's link             |
+
+`Device.getPort(name)`, `Device.getPortAt(index)`, `Device.getPortCount()`,
+`Device.getPorts()` are all present on the Device object — equivalent to
+the Java framework's port accessors. We never needed `getInterface(...)` or
+`getMainNetwork().getPort(uuid, idx)` — they may not exist or may be
+internal.
+
+### Tear-down primitive
+
+`lw.deleteLink(deviceName, portName)` removes the link incident to the
+named port. Useful when re-running a milestone without restarting PT.
+
+## M4..M6
 
 _Stubbed; populate after each milestone lands._
