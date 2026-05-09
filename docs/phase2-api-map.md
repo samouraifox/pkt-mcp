@@ -341,6 +341,105 @@ Final state per the bridge:
 default. The cable rendering in the canvas should resolve from
 red-triangles to solid green now.
 
-## M6
+## M6 — End-to-end smoke test
 
-_Stubbed; populate after each milestone lands._
+**Status:** done. PC1 added, linked to SW1 Fa0/2 on its `FastEthernet0`, IP
+`192.168.1.10/24` + gateway `192.168.1.1` set, `ping 192.168.1.1` from the
+desktop Command Prompt returned **4/4 replies, 0% loss**. Phase 2 closes here.
+
+### PC port layout
+
+A fresh `PC-PT` (devType=8) exposes **two** ports:
+
+| index | name             | use                              |
+|-------|------------------|----------------------------------|
+| 0     | `FastEthernet0`  | the host's Ethernet NIC          |
+| 1     | `Bluetooth`      | wireless PAN, ignored for Phase 2 |
+
+Note the host port name is `FastEthernet0` (single index, no slash) — *not*
+`FastEthernet0/0` like router/switch line cards. Trips up assumptions
+inherited from M3.
+
+### End-host configuration API
+
+End hosts (PCs, presumably Laptops/Servers/Tablets) do **not** use IOS CLI.
+They configure through structural setters on `Pc` and `HostPort`:
+
+| call                                          | effect                                      |
+|-----------------------------------------------|---------------------------------------------|
+| `pc.getPort("FastEthernet0").setIpSubnetMask(ip, mask)` | Static IPv4 + mask on the host port |
+| `pc.getPort("FastEthernet0").setDhcpClientFlag(false)` | Disable DHCP (required for static to stick) |
+| `pc.setDefaultGateway(ip)`                    | Default gateway at the **device** level     |
+| `port.setDhcpClientFlag(true)`                | DHCP client mode (skip static)              |
+
+Verified on PC1: after `setIpSubnetMask("192.168.1.10","255.255.255.0")` and
+`setDefaultGateway("192.168.1.1")`, `port.getIpAddress()` and
+`getSubnetMask()` reflect the values immediately, port up/up.
+
+`HostPort.setDefaultGateway(ip)` also exists at the port level (different
+from the device-level setter on `Pc`); the device-level call is the
+ergonomic match for what the GUI's IP Configuration dialog does.
+
+### `Pc.getCommandPrompt()` — desktop Command Prompt
+
+```js
+var tl = pc.getCommandPrompt();   // distinct from device.getCommandLine()
+tl.getName();                      // "con0"
+tl.getMode();                      // "user"
+tl.getPrompt();                    // "C:\\>"
+tl.enterCommand("ping 192.168.1.1");
+```
+
+This is the desktop's Windows-flavored shell, returned as the same
+`TerminalLine` type used for IOS lines. Same `enterCommand` interface; same
+mode/prompt introspection. Pacing rule from M5 still applies — one logical
+line per call.
+
+### Output capture: `TerminalLine.getOutput()`
+
+The Doxygen page for `TerminalLine` lists `outputWritten(string, bool, int)`
+as the IPC event for new terminal output, but Qt-Script wrappers do **not**
+expose IPC events as connectable signals (`tl.outputWritten` is `undefined`).
+The script-only convenience method that *does* exist on the wrapper is:
+
+```js
+tl.getOutput();   // returns the full terminal buffer as a string
+```
+
+This isn't in the C++ Doxygen — it's added in the wrapper layer. Polling it
+between bridge calls is dramatically simpler than registering for events.
+For Phase 2 this is the way; if a Phase-N use case needs streaming
+(progressive output for a long-running command), the event-registration path
+through `ipc.registerObjectEvent(uuid, eventName, callback)` is still
+available — `registerObjectEvent` and `unregisterObjectEvent` are present on
+both `ipc.*` and the terminal wrapper.
+
+### Ping verification
+
+```python
+# in Python after enterCommand("ping 192.168.1.1") on the PC's Command Prompt:
+buf = bridge.eval('pc.getCommandPrompt().getOutput()')
+assert re.search(r"Reply from 192\.168\.1\.1", buf)
+```
+
+PT's simulator runs in real-time mode by default — for the simple
+single-router single-switch topology, all four ICMP echoes complete inside
+~1 s wall time (the t=1s poll already saw the closing
+`Packets: Sent = 4, Received = 4, Lost = 0 (0% loss)` summary). Plan for
+longer waits on multi-hop routed paths or when convergence is in flight.
+
+### Phase 2 close-out
+
+Topology in PT after M1–M6 is exactly the spec from the original Phase 2
+plan:
+
+```
+[R1] G0/0 ---copper-straight--- Fa0/1 [SW1] Fa0/2 ---copper-straight--- FastEthernet0 [PC1]
+ 192.168.1.1/24                                                            192.168.1.10/24, gw 192.168.1.1
+```
+
+End-to-end IPv4 reachability proven by PC1 ICMP replies. The JS API now has
+documented coverage for: device creation, links, IOS CLI configuration, host
+configuration, terminal output capture. That's the surface the Phase 4 MCP
+tools (`add_device`, `connect`, `configure_interface`, `configure_host`,
+`run_command`) will lean on.
