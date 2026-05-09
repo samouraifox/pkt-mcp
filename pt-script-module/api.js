@@ -64,9 +64,14 @@ var CABLE_TYPES = {
 // fresh workspace already contains a "Power Distribution Device0").
 var SYSTEM_DEVICE_NAMES = { "Power Distribution Device0": true };
 
-// Pacing for configure_interface's enterCommand sequence. M5 used one
-// mailbox roundtrip per command (~50 ms each); 100 ms here is conservative.
-var STEP_MS = 100;
+// Pacing for paced async ops. Fixed setTimeout gaps are not enough — the
+// IOS simulator takes 1-3 s to even reach its boot dialog, and individual
+// CLI mode transitions can take a few hundred ms. We poll for state
+// instead and only proceed when the expected transition has actually
+// landed (the M5 race rule, properly handled this time).
+var POLL_MS_INNER = 100;
+var BOOT_DIALOG_DEADLINE_MS = 30000;   // PT IOS boot is slow on first start
+var IOS_MODE_DEADLINE_MS = 8000;
 
 // ─── error helper ────────────────────────────────────────────────────────
 
@@ -168,6 +173,25 @@ function portStateOf(port) {
     };
 }
 
+// ─── async polling helper ────────────────────────────────────────────────
+
+// Poll a predicate every interval_ms until it returns truthy, then call
+// onReady(); if deadline_ms expires first, call onTimeout(). Predicates
+// that throw count as falsy (a setter may not be ready right after
+// addDevice, etc.).
+function pollUntil(predicate, opts, onReady, onTimeout) {
+    var iv = (opts && opts.interval_ms) || POLL_MS_INNER;
+    var deadlineAt = Date.now() + ((opts && opts.deadline_ms) || IOS_MODE_DEADLINE_MS);
+    function tick() {
+        var ok = false;
+        try { ok = !!predicate(); } catch (e) { /* keep polling */ }
+        if (ok) { onReady(); return; }
+        if (Date.now() > deadlineAt) { onTimeout(); return; }
+        setTimeout(tick, iv);
+    }
+    tick();
+}
+
 // ─── ops ─────────────────────────────────────────────────────────────────
 
 function op_add_device(args, done) {
@@ -219,23 +243,89 @@ function op_add_device(args, done) {
         return { uuid: String(uuid), name: name };
     }
 
-    // Routers boot into the System Configuration Dialog (M5). Skip with
-    // enterCommand("no") on a small delay so the boot prompt has time to
-    // appear. Async: wait → send "no" → wait → done.
-    setTimeout(function () {
-        try {
-            var tl = (typeof dev.getCommandLine === "function") ? dev.getCommandLine() : null;
-            if (tl && typeof tl.enterCommand === "function") {
-                tl.enterCommand("no");
+    // Routers boot into the System Configuration Dialog (M5). PT IOS takes
+    // 1-3 s to even reach the dialog prompt, so a fixed setTimeout doesn't
+    // work — we have to poll for the dialog to actually appear before
+    // sending "no", then poll for the resulting transition into user mode.
+    function tlFor(dev) {
+        try { return (typeof dev.getCommandLine === "function") ? dev.getCommandLine() : null; }
+        catch (e) { return null; }
+    }
+    function modeOf(tl) { try { return (tl && tl.getMode) ? tl.getMode() : ""; } catch (e) { return ""; } }
+    function promptOf(tl) { try { return (tl && tl.getPrompt) ? tl.getPrompt() : ""; } catch (e) { return ""; } }
+
+    // Phase 1: dialog prompt is up, OR we're somehow already past it.
+    pollUntil(
+        function () {
+            var tl = tlFor(dev);
+            if (!tl) return false;
+            if (/yes\/no/i.test(promptOf(tl))) return true;
+            var m = modeOf(tl);
+            return (m === "user" || m === "enable");
+        },
+        { interval_ms: POLL_MS_INNER, deadline_ms: BOOT_DIALOG_DEADLINE_MS },
+        function () {
+            var tl = tlFor(dev);
+            if (tl && /yes\/no/i.test(promptOf(tl))) {
+                try { tl.enterCommand("no"); }
+                catch (e) {
+                    done(null, err("INTERNAL", "router dialog skip enterCommand threw: " + e));
+                    return;
+                }
             }
-        } catch (e) {
-            done(null, err("INTERNAL", "router dialog skip failed: " + e));
-            return;
+            // Phase 2: post-"no", IOS prints "Press RETURN to get started!"
+            // and parks in mode=logout until we send an empty Enter. Wait
+            // for either user mode (already past) or that logout state, then
+            // send RETURN if needed and wait for user mode.
+            pollUntil(
+                function () {
+                    var t = tlFor(dev);
+                    if (!t) return false;
+                    var m = modeOf(t);
+                    if (m === "user" || m === "enable" || m === "logout") return true;
+                    var out = (t.getOutput ? t.getOutput() : "");
+                    return /Press RETURN to get started/.test(out);
+                },
+                { interval_ms: POLL_MS_INNER, deadline_ms: IOS_MODE_DEADLINE_MS },
+                function () {
+                    var t = tlFor(dev);
+                    var m = modeOf(t);
+                    if (m !== "user" && m !== "enable") {
+                        // Press RETURN.
+                        try { t.enterCommand(""); } catch (e) {}
+                    }
+                    pollUntil(
+                        function () {
+                            var mm = modeOf(tlFor(dev));
+                            return (mm === "user" || mm === "enable");
+                        },
+                        { interval_ms: POLL_MS_INNER, deadline_ms: IOS_MODE_DEADLINE_MS },
+                        function () { done({ uuid: String(uuid), name: name }, null); },
+                        function () {
+                            var t4 = tlFor(dev);
+                            done(null, err("PT_TIMEOUT",
+                                "router did not reach user mode after dialog + RETURN",
+                                { last_mode: modeOf(t4), last_prompt: promptOf(t4),
+                                  output_tail: (t4 && t4.getOutput) ? t4.getOutput().slice(-200) : "" }));
+                        }
+                    );
+                },
+                function () {
+                    var t2 = tlFor(dev);
+                    done(null, err("PT_TIMEOUT",
+                        "router did not reach 'Press RETURN' state after sending 'no'",
+                        { last_mode: modeOf(t2), last_prompt: promptOf(t2),
+                          output_tail: (t2 && t2.getOutput) ? t2.getOutput().slice(-200) : "" }));
+                }
+            );
+        },
+        function () {
+            var tl3 = tlFor(dev);
+            done(null, err("PT_TIMEOUT",
+                "router boot dialog never appeared (boot took >" + BOOT_DIALOG_DEADLINE_MS + "ms)",
+                { last_mode: modeOf(tl3), last_prompt: promptOf(tl3) }));
         }
-        setTimeout(function () {
-            done({ uuid: String(uuid), name: name }, null);
-        }, STEP_MS);
-    }, STEP_MS);
+    );
     return DEFER;
 }
 
@@ -297,43 +387,79 @@ function op_configure_interface(args, done) {
     var tl   = (typeof dev.getCommandLine === "function") ? dev.getCommandLine() : null;
     if (!tl) throw err("PT_NOT_FOUND", "no command line on device: " + name);
 
+    // Each step's predicate is what must become true before we send the
+    // next command. Mode-changing steps wait for the mode transition;
+    // state-changing steps (ip address, no shutdown) wait for the port to
+    // reflect the change. This is the M5 race rule properly handled —
+    // fixed sleeps drop commands when IOS lags.
     var steps = [
-        "enable",
-        "configure terminal",
-        "interface " + iface,
-        "ip address " + ip + " " + mask
+        { cmd: "enable",
+          ready: function () { return tl.getMode() === "enable"; } },
+        { cmd: "configure terminal",
+          ready: function () { return tl.getMode() === "global"; } },
+        { cmd: "interface " + iface,
+          ready: function () { return /^int/.test(tl.getMode() || ""); } },
+        { cmd: "ip address " + ip + " " + mask,
+          ready: function () { return port.getIpAddress() === ip; } }
     ];
-    if (noShut) steps.push("no shutdown");
-    steps.push("end");
+    if (noShut) {
+        steps.push({ cmd: "no shutdown",
+                     ready: function () { return port.isPortUp() === true; } });
+    }
+    steps.push({ cmd: "end",
+                 ready: function () { return tl.getMode() === "enable"; } });
 
     var i = 0;
-    function next() {
+    function nextStep() {
         if (i >= steps.length) {
-            var st = portStateOf(port);
-            var ipOk   = (st.ip === ip);
-            var maskOk = (st.mask === mask);
-            var upOk   = (!noShut) || (st.up === true);
-            if (!(ipOk && maskOk && upOk)) {
-                done(null, err("PT_TIMEOUT",
-                    "configure_interface did not converge: requested " +
-                    JSON.stringify({ ip: ip, mask: mask, no_shutdown: noShut }) +
-                    ", observed " + JSON.stringify(st),
-                    { observed: st,
-                      requested: { ip: ip, mask: mask, no_shutdown: noShut } }));
-                return;
-            }
-            done({ ok: true, port_state: st }, null);
+            // Final convergence: wait for the port to read fully up/up.
+            // protocol_up lags no-shutdown by ~1s (line protocol nego);
+            // poll instead of insta-check so callers see a coherent
+            // green state when configure_interface returns.
+            pollUntil(
+                function () {
+                    var st = portStateOf(port);
+                    return (st.ip === ip) && (st.mask === mask) &&
+                           (!noShut || (st.up === true && st.protocol_up === true));
+                },
+                { interval_ms: POLL_MS_INNER, deadline_ms: IOS_MODE_DEADLINE_MS },
+                function () {
+                    done({ ok: true, port_state: portStateOf(port) }, null);
+                },
+                function () {
+                    var st = portStateOf(port);
+                    done(null, err("PT_TIMEOUT",
+                        "configure_interface did not converge: requested " +
+                        JSON.stringify({ ip: ip, mask: mask, no_shutdown: noShut }) +
+                        ", observed " + JSON.stringify(st),
+                        { observed: st,
+                          requested: { ip: ip, mask: mask, no_shutdown: noShut } }));
+                }
+            );
             return;
         }
+        var step = steps[i++];
         try {
-            tl.enterCommand(steps[i++]);
+            tl.enterCommand(step.cmd);
         } catch (e) {
-            done(null, err("INTERNAL", "enterCommand threw: " + e));
+            done(null, err("INTERNAL", "enterCommand threw on '" + step.cmd + "': " + e));
             return;
         }
-        setTimeout(next, STEP_MS);
+        pollUntil(
+            step.ready,
+            { interval_ms: POLL_MS_INNER, deadline_ms: IOS_MODE_DEADLINE_MS },
+            nextStep,
+            function () {
+                done(null, err("PT_TIMEOUT",
+                    "step did not converge: '" + step.cmd + "'",
+                    { failed_step: step.cmd,
+                      mode: (tl.getMode ? tl.getMode() : null),
+                      prompt: (tl.getPrompt ? tl.getPrompt() : null),
+                      observed: portStateOf(port) }));
+            }
+        );
     }
-    setTimeout(next, STEP_MS);
+    nextStep();
     return DEFER;
 }
 

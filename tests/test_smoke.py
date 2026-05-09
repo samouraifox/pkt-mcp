@@ -23,8 +23,11 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "tools"))
 
 from pkt_bridge import Bridge, PtNotFound  # noqa: E402
 
-PING_DEADLINE_S = 10.0
+PING_DEADLINE_S = 15.0     # one ping batch (~5s) + buffer
 PING_POLL_S = 0.5
+PING_ATTEMPTS = 4          # STP convergence on a fresh 2960 access port is
+                           # ~30 s (listening + learning); the first 1–2
+                           # batches drop / partially drop until it lands.
 
 
 def _reset_topology(b: Bridge) -> None:
@@ -35,21 +38,32 @@ def _reset_topology(b: Bridge) -> None:
             pass
 
 
-def _wait_for_ping(b: Bridge, host: str) -> str:
-    """Poll the host's command-prompt buffer until the ping summary lands or
-    the deadline expires. Returns the final buffer either way; assertions
-    in the caller decide pass/fail."""
-    deadline = time.time() + PING_DEADLINE_S
+def _last_ping_section(output: str, target: str) -> str:
+    """Slice from the last 'Pinging <target>' header to the end — so we
+    only look at the most recent ping batch when retrying."""
+    idx = output.rfind(f"Pinging {target}")
+    return output[idx:] if idx >= 0 else output
+
+
+def _ping_with_retry(b: Bridge, host: str, target: str) -> str:
+    """Issue ping, poll buffer for the batch's outcome. Retry until we get
+    a 4/4 batch (the M6 success criterion) — partial-loss batches mean STP
+    is still converging on the freshly-connected switchport. Returns the
+    full buffer either way."""
     output = ""
-    while time.time() < deadline:
-        resp = b.run_command(host, "")  # empty enter refreshes the buffer
-        output = resp["output"]
-        # PT renders both "Reply from..." lines and the "Packets: Sent = 4,
-        # Received = 4, Lost = 0 (0% loss)" closing summary. Either signal
-        # tells us the ping has finished — bail as soon as we see one.
-        if "Lost = 0" in output or "0% loss" in output:
-            return output
-        time.sleep(PING_POLL_S)
+    for _ in range(PING_ATTEMPTS):
+        b.run_command(host, f"ping {target}")
+        deadline = time.time() + PING_DEADLINE_S
+        while time.time() < deadline:
+            resp = b.run_command(host, "")  # empty enter refreshes buffer
+            output = resp["output"]
+            section = _last_ping_section(output, target)
+            # "Lost = 0" only — "0% loss" is a substring of "100% loss".
+            if "Packets: Sent" in section:
+                if "Lost = 0" in section:
+                    return output
+                break  # any loss → retry
+            time.sleep(PING_POLL_S)
     return output
 
 
@@ -94,12 +108,11 @@ def test_m6_topology_and_ping() -> None:
     assert pc_port["mask"] == "255.255.255.0", pc_port
 
     # ── PC1 → R1 ping (auto-dispatches terminal="desktop" from cache) ───
-    b.run_command("PC1", "ping 192.168.1.1")
-    output = _wait_for_ping(b, "PC1")
+    output = _ping_with_retry(b, "PC1", "192.168.1.1")
+    section = _last_ping_section(output, "192.168.1.1")
 
-    assert "Reply from 192.168.1.1" in output, f"no ICMP replies:\n{output}"
-    assert ("Lost = 0" in output) or ("0% loss" in output), \
-        f"ping not 4/4:\n{output}"
+    assert "Reply from 192.168.1.1" in section, f"no ICMP replies:\n{output}"
+    assert "Lost = 0" in section, f"ping not 4/4:\n{output}"
 
 
 if __name__ == "__main__":

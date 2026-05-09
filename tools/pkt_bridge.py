@@ -36,7 +36,7 @@ MAILBOX = "/tmp/pkt-mcp"
 CMD_PATH = os.path.join(MAILBOX, "cmd.json")
 CMD_TMP = os.path.join(MAILBOX, "cmd.json.tmp")
 RESULT_PATH = os.path.join(MAILBOX, "result.json")
-TIMEOUT_S = 10.0
+TIMEOUT_S = 60.0     # must exceed the longest JS-side deadline (router boot ~30s)
 POLL_S = 0.05
 
 
