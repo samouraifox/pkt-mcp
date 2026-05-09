@@ -60,9 +60,14 @@ var CABLE_TYPES = {
     CUSTOM_IO:         8114
 };
 
-// System entities to filter from list_devices (per phase2 M2 finding —
-// fresh workspace already contains a "Power Distribution Device0").
-var SYSTEM_DEVICE_NAMES = { "Power Distribution Device0": true };
+// System entities to filter from list_devices. Fresh workspaces have a
+// "Power Distribution Device0" (M2 finding); after fileOpen the suffix
+// increments ("Device1", etc.) so a prefix match is more robust than a
+// fixed name. Phase 4 may want to switch to a type-int filter if more
+// system entity kinds turn up.
+function isSystemDevice(name) {
+    return name.indexOf("Power Distribution Device") === 0;
+}
 
 // Pacing for paced async ops. Fixed setTimeout gaps are not enough — the
 // IOS simulator takes 1-3 s to even reach its boot dialog, and individual
@@ -72,6 +77,7 @@ var SYSTEM_DEVICE_NAMES = { "Power Distribution Device0": true };
 var POLL_MS_INNER = 100;
 var BOOT_DIALOG_DEADLINE_MS = 30000;   // PT IOS boot is slow on first start
 var IOS_MODE_DEADLINE_MS = 8000;
+var SAVE_DEADLINE_MS = 10000;          // fileSaveAsNoPrompt writes async
 
 // ─── error helper ────────────────────────────────────────────────────────
 
@@ -543,7 +549,7 @@ function op_list_devices() {
     for (var i = 0; i < devs.length; i++) {
         var d = devs[i];
         var nm = d.getName();
-        if (SYSTEM_DEVICE_NAMES[nm]) continue;
+        if (isSystemDevice(nm)) continue;
 
         var typeInt = (typeof d.getType === "function") ? d.getType() : null;
         var typeName = null;
@@ -569,12 +575,48 @@ function op_get_port_state(args) {
     return portStateOf(port);
 }
 
-function op_save(args) {
-    // Step 6 will probe ipc.appWindow / ipc.systemFileManager / activeFile /
-    // activeWorkspace for save|export|write methods (Doxygen incomplete —
-    // see TerminalLine.getOutput in M6) before declaring this a blocker.
-    throw err("INTERNAL", "save() not implemented yet — Step 6 probe pending",
-        { status: "blocker" });
+function op_save(args, done) {
+    // Step 6 introspection found appWindow.fileSaveAsNoPrompt(path, bool) as
+    // the headless save primitive. It writes a real .pkt asynchronously
+    // (~ms-to-1s latency) and does NOT update getActiveFile().getSavedFilename(),
+    // so successive saves to different paths don't trash PT's "current file"
+    // state — exactly what we want for an MCP server.
+    var path = requireArg(args, "path", "string");
+    if (path.charAt(0) !== "/") {
+        throw err("BAD_ARGS",
+            "path must be absolute (start with '/'), got: " + path);
+    }
+    var win = ipc.appWindow();
+    var sfm = ipc.systemFileManager();
+    if (typeof win.fileSaveAsNoPrompt !== "function") {
+        throw err("INTERNAL", "appWindow.fileSaveAsNoPrompt missing");
+    }
+
+    // Best-effort: wipe any stale file at path so file-existence after the
+    // call is an unambiguous signal that the write completed.
+    try { sfm.removeFile(path); } catch (e) {}
+
+    try { win.fileSaveAsNoPrompt(path, true); }
+    catch (e) {
+        throw err("INTERNAL", "fileSaveAsNoPrompt threw: " + e);
+    }
+
+    // Poll for the file to land — async write.
+    pollUntil(
+        function () { return sfm.fileExists(path); },
+        { interval_ms: POLL_MS_INNER, deadline_ms: SAVE_DEADLINE_MS },
+        function () {
+            var size = null;
+            try { size = sfm.getFileSize(path); } catch (e) {}
+            done({ ok: true, path: path, size: size }, null);
+        },
+        function () {
+            done(null, err("PT_TIMEOUT",
+                "save did not flush to disk within " + SAVE_DEADLINE_MS + "ms",
+                { path: path }));
+        }
+    );
+    return DEFER;
 }
 
 // ─── dispatch table ──────────────────────────────────────────────────────

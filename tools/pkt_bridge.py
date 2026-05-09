@@ -242,10 +242,12 @@ class Bridge:
             "device": device, "interface": interface,
         })
 
-    def save(self, path: str) -> None:
-        """Phase 3 blocker — JS handler raises BridgeInternal until Step 6's
-        introspection scan resolves the headless-save question."""
-        self.call("save", {"path": path})
+    def save(self, path: str) -> dict:
+        """Save the current workspace to <path> via appWindow.fileSaveAsNoPrompt.
+        Returns {ok, path, size}. Path must be absolute. Does NOT update PT's
+        "current file" pointer (getSavedFilename), so Phase 4 can save snapshots
+        without trashing whatever workspace the user has open."""
+        return self.call("save", {"path": path})
 
     # ── debug escape hatch ───────────────────────────────────────────────
 

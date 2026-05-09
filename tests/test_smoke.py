@@ -28,6 +28,7 @@ PING_POLL_S = 0.5
 PING_ATTEMPTS = 4          # STP convergence on a fresh 2960 access port is
                            # ~30 s (listening + learning); the first 1–2
                            # batches drop / partially drop until it lands.
+SAVE_PATH = "/tmp/pkt-mcp/test-roundtrip.pkt"
 
 
 def _reset_topology(b: Bridge) -> None:
@@ -113,6 +114,35 @@ def test_m6_topology_and_ping() -> None:
 
     assert "Reply from 192.168.1.1" in section, f"no ICMP replies:\n{output}"
     assert "Lost = 0" in section, f"ping not 4/4:\n{output}"
+
+    # ── save + reload round-trip (Step 6) ──────────────────────────────
+    # save() uses appWindow.fileSaveAsNoPrompt under the hood; fileOpen
+    # isn't a typed op yet so the reload goes via raw eval. Phase 4 may
+    # add a typed `load` op once a use case forces it.
+    if os.path.exists(SAVE_PATH):
+        os.remove(SAVE_PATH)
+    save_result = b.save(SAVE_PATH)
+    assert save_result["ok"] is True, save_result
+    assert save_result["path"] == SAVE_PATH, save_result
+    assert os.path.exists(SAVE_PATH), f"save claimed ok but no file at {SAVE_PATH}"
+    assert os.path.getsize(SAVE_PATH) > 1000, \
+        f"saved file suspiciously small: {os.path.getsize(SAVE_PATH)} bytes"
+
+    # Reload into PT and verify the topology persisted.
+    open_ret = b.raw(f'ipc.appWindow().fileOpen({SAVE_PATH!r})')
+    assert open_ret in (0, None), f"fileOpen returned {open_ret}"
+
+    after = {d["name"]: d for d in b.list_devices()}
+    assert {"R1", "SW1", "PC1"} <= set(after), f"missing devices after reload: {after}"
+    assert after["R1"]["type"] == "ROUTER"
+    assert after["PC1"]["type"] == "PC"
+
+    r1_port = b.get_port_state("R1", "GigabitEthernet0/0")
+    assert r1_port["ip"] == "192.168.1.1", r1_port
+    assert r1_port["up"] is True and r1_port["protocol_up"] is True, r1_port
+
+    pc1_port = b.get_port_state("PC1", "FastEthernet0")
+    assert pc1_port["ip"] == "192.168.1.10", pc1_port
 
 
 if __name__ == "__main__":

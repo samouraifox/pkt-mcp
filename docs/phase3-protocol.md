@@ -342,47 +342,49 @@ can keep probing PT's API surface from Python without re-loading the listener.
 - This is the read-only equivalent of what `configure_interface` returns in
   its `port_state` block.
 
-### `save` — BLOCKER
+### `save`
 
 **Input**: `{ "path": "<absolute filesystem path to .pkt>" }`
-**Output**: `{ "ok": true, "path": "<echoed>" }`
+**Output**: `{ "ok": true, "path": "<echoed>", "size": <bytes> }`
 
-**Status: not implemented in Step 2. Probed in Step 6.**
+**Failure modes**
 
-PT's headless save surface is unknown. Step 6 starts with an **introspection
-scan** before falling back to documented candidates — Doxygen has been
-incomplete before (`TerminalLine.getOutput()` in M6 was wrapper-only, not
-documented). Run inside the SE:
+- `BAD_ARGS` — relative path (must start with `/`)
+- `PT_TIMEOUT` — write didn't land on disk within `SAVE_DEADLINE_MS` (10 s)
+- `INTERNAL` — `appWindow.fileSaveAsNoPrompt` missing or threw
 
-```js
-function scan(obj, label) {
-    for (var k in obj) {
-        if (/save|export|write/i.test(k)) ipc.print(label + "." + k);
-    }
-}
-scan(ipc.appWindow(), "appWindow");
-scan(ipc.systemFileManager(), "systemFileManager");
-// also try the active workspace / file objects:
-scan(ipc.appWindow().getActiveFile(), "activeFile");
-scan(ipc.appWindow().getActiveWorkspace(), "activeWorkspace");
-```
+**Notes**
 
-Any hit matching the regex is probed (call with a test path, check whether
-a `.pkt` lands at the path, check for a GUI dialog).
+Step 6 introspection scan turned up `appWindow.fileSaveAsNoPrompt(path, bool)`
+as the headless save primitive — explicitly named "no prompt", and confirmed
+to write a real `.pkt` blob (~50 KB for the M6 topology) without popping any
+GUI. The boolean second arg toggles a small metadata flag (4-byte size diff
+observed); we pass `true` to match what `fileSaveAs` uses by default.
 
-If the scan turns up nothing usable, fall back to the doc'd candidates in
-order of preference:
+**Important property**: `fileSaveAsNoPrompt` does **not** update
+`getActiveFile().getSavedFilename()` — it's a "save-as-copy" semantic. That's
+exactly what an MCP server wants: snapshots can be written to arbitrary
+paths without trashing PT's "current open file" pointer.
 
-1. `ipc.systemFileManager().saveWorkspace(path)` (or similarly named) —
-   if this exists and writes a `.pkt` blob, this is the answer.
-2. `ipc.appWindow().saveAs(path)` / `.save()` — risk that it pops a GUI
-   dialog rather than running headlessly; if so, ineligible.
-3. `xdotool key ctrl+s` from the Python side — last resort. Pulls us back
-   outside the SE sandbox and breaks the no-GUI invariant from Phase 2.
+The write is asynchronous; the JS handler polls `sfm.fileExists(path)` until
+the file lands or the deadline expires. Returned `size` is from
+`sfm.getFileSize(path)` after convergence — useful sanity signal for the
+caller (a 1KB file would mean the save raced).
 
-If none of (1)/(2) works headlessly, `save` becomes a documented Phase 4
-prerequisite blocker. Step 6 returns a stop-and-decide rather than
-implementing the keystroke fallback unilaterally.
+**Companion**: a complementary `appWindow.fileOpen(path)` exists and works
+headlessly too (returns `0`, no dialog, restores the topology with configs
+intact — verified by the smoke test's round-trip). It's not a typed op yet;
+the smoke test reaches it via `Bridge.raw()`. Phase 4 may want to add a
+typed `load` op once a use case forces it.
+
+**GUI-popping methods to avoid** (probed in Step 6):
+
+- `appWindow.fileSave()` — opens Save As dialog when no current path is set
+- `appWindow.fileSaveAs(path)` — always opens Save As dialog (path
+  pre-filled, but still requires user click)
+
+These are listed here so future work doesn't re-test them in a probe batch
+and lock the listener with a modal dialog.
 
 ## Why a JS dispatcher (not a Python one)
 
