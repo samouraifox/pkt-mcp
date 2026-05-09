@@ -1,57 +1,38 @@
-// pkt-mcp — Phase 1B spike Script Module body.
-// Purpose: prove a PT Script Module can call the IPC API to add/rename a router,
-// without going through the externally-authenticated PTMP/ExApp path.
+// pkt-mcp — Phase 2 M1 probe iteration 2.
+// First sweep confirmed HUB=4 / PC=8 / SERVER=9 with their guessed models, but
+// SWITCH=1 ("2960") and WIRELESS_ROUTER=11 ("WRT300N") returned empty (model
+// rejected). Strings on $PT_HOME/bin/PacketTracer point to "2960-24TT" and
+// "Linksys-WRT300N" — re-probe with those (plus generic "Switch-PT" as a
+// backup) to confirm the JS API accepts them.
 //
-// Source-of-truth file. The encrypted .pts that PT generates after Save is a
-// build artifact; do not commit it.
-//
-// Drop this into the Script Files tab of a new PT Script Module. See
-// pt-script-module/INSTALL.md for step-by-step PT GUI instructions.
+// Re-run procedure: File → New, then Stop / Start the module.
 
 function main() {
-    dprint("[pkt-mcp] start");
-    dprint("[pkt-mcp] typeof ipc=" + typeof ipc +
-           " typeof DeviceType=" + typeof DeviceType +
-           " typeof appWindow=" + typeof appWindow);
+    dprint("[pkt-mcp] phase2 M1 iter2 start");
 
-    // Probe 1: can we read the network?
-    try {
-        var n = ipc.network();
-        dprint("[pkt-mcp] ipc.network() ok, deviceCount=" + n.getDeviceCount());
-    } catch (e) {
-        dprint("[pkt-mcp] ipc.network() ERR: " + e);
+    var win = ipc.appWindow();
+    var lw = win.getActiveWorkspace().getLogicalWorkspace();
+
+    var probes = [
+        [1,  "2960-24TT"],         // expect SWITCH (Catalyst default)
+        [1,  "Switch-PT"],         // expect SWITCH (generic fallback)
+        [11, "Linksys-WRT300N"]    // expect WIRELESS_ROUTER
+    ];
+
+    for (var i = 0; i < probes.length; i++) {
+        var devType = probes[i][0];
+        var model = probes[i][1];
+        var x = 100 + i * 200;
+        var y = 100;
+        try {
+            var name = lw.addDevice(devType, model, x, y);
+            dprint("[pkt-mcp] N=" + devType + " model=" + model + " -> " + name);
+        } catch (e) {
+            dprint("[pkt-mcp] N=" + devType + " model=" + model + " ERR: " + e);
+        }
     }
 
-    // Probe 2: can we reach the active workspace?
-    var win, ws, lw;
-    try {
-        win = ipc.appWindow();
-        dprint("[pkt-mcp] ipc.appWindow() ok");
-        ws = win.getActiveWorkspace();
-        dprint("[pkt-mcp] getActiveWorkspace() ok");
-        lw = ws.getLogicalWorkspace();
-        dprint("[pkt-mcp] getLogicalWorkspace() ok");
-    } catch (e) {
-        dprint("[pkt-mcp] workspace chain ERR: " + e);
-        return;
-    }
-
-    // Probe 3: add a Cisco 2911 router and rename it to R1.
-    try {
-        // PT's IPC engine wants the int value of the C++ DeviceType enum, not a name
-        // string. Confirmed from the framework JAR: ROUTER=0, SWITCH=1, CLOUD=2,
-        // BRIDGE=3, HUB=4, REPEATER=5, AP=7, PC=8, SERVER=9, ...
-        var devType = 0;
-        var name = lw.addDevice(devType, "2911", 200, 200);
-        dprint("[pkt-mcp] addDevice returned: " + name);
-
-        var net = win.getActiveFile().getMainNetwork();
-        var dev = net.getDevice(name);
-        dev.setName("R1");
-        dprint("[pkt-mcp] OK created=" + name + " renamed=R1");
-    } catch (e) {
-        dprint("[pkt-mcp] addDevice ERR: " + e);
-    }
+    dprint("[pkt-mcp] phase2 M1 iter2 done");
 }
 
 function cleanUp() {
