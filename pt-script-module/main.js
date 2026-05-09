@@ -1,40 +1,101 @@
-// pkt-mcp — Phase 2 M1 probe iteration 2.
-// First sweep confirmed HUB=4 / PC=8 / SERVER=9 with their guessed models, but
-// SWITCH=1 ("2960") and WIRELESS_ROUTER=11 ("WRT300N") returned empty (model
-// rejected). Strings on $PT_HOME/bin/PacketTracer point to "2960-24TT" and
-// "Linksys-WRT300N" — re-probe with those (plus generic "Switch-PT" as a
-// backup) to confirm the JS API accepts them.
+// pkt-mcp — Phase 2 file-polling listener.
+// Polls /tmp/pkt-mcp/cmd.json every 500ms; eval()s cmd.code; atomic-writes
+// the response to /tmp/pkt-mcp/result.json. Once loaded the module stays
+// running until Stop, so subsequent probes go through the file mailbox
+// instead of the PT GUI paste/save/export/restart cycle.
 //
-// Re-run procedure: File → New, then Stop / Start the module.
+// Mailbox protocol:
+//   Python writes  /tmp/pkt-mcp/cmd.json.tmp,    renames to cmd.json
+//   SE     reads   /tmp/pkt-mcp/cmd.json,        deletes after read
+//   SE     writes  /tmp/pkt-mcp/result.json.tmp, renames to result.json
+//   Python reads   /tmp/pkt-mcp/result.json,     deletes after read
+// Command shape: {"id": <str>, "code": <js source>}
+// Result  shape: {"id": <same>, "result": <jsonable>, "error": null|str,
+//                 "logs": [<dprint strings during eval>]}
 
-function main() {
-    dprint("[pkt-mcp] phase2 M1 iter2 start");
+var MAILBOX     = "/tmp/pkt-mcp";
+var CMD_PATH    = MAILBOX + "/cmd.json";
+var RESULT_PATH = MAILBOX + "/result.json";
+var POLL_MS     = 500;
 
-    var win = ipc.appWindow();
-    var lw = win.getActiveWorkspace().getLogicalWorkspace();
+var sfm        = null;
+var pollTimer  = null;
+var realDprint = dprint;
 
-    var probes = [
-        [1,  "2960-24TT"],         // expect SWITCH (Catalyst default)
-        [1,  "Switch-PT"],         // expect SWITCH (generic fallback)
-        [11, "Linksys-WRT300N"]    // expect WIRELESS_ROUTER
-    ];
+function writeAtomic(path, content) {
+    var tmp = path + ".tmp";
+    sfm.writePlainTextToFile(tmp, content);
+    sfm.moveSrcFileToDestFile(tmp, path, true);
+}
 
-    for (var i = 0; i < probes.length; i++) {
-        var devType = probes[i][0];
-        var model = probes[i][1];
-        var x = 100 + i * 200;
-        var y = 100;
-        try {
-            var name = lw.addDevice(devType, model, x, y);
-            dprint("[pkt-mcp] N=" + devType + " model=" + model + " -> " + name);
-        } catch (e) {
-            dprint("[pkt-mcp] N=" + devType + " model=" + model + " ERR: " + e);
-        }
+function buildResult(id, result, error, logs) {
+    try {
+        return JSON.stringify({
+            id: (id == null) ? null : id,
+            result: (result === undefined) ? null : result,
+            error: error,
+            logs: logs
+        });
+    } catch (e) {
+        // Cyclic / non-jsonable result; downgrade to string and flag in error.
+        return JSON.stringify({
+            id: (id == null) ? null : id,
+            result: String(result),
+            error: (error || "") + " (stringify-failed:" + e + ")",
+            logs: logs
+        });
+    }
+}
+
+function handleCommand(raw) {
+    var cmd, id = null, code = null;
+    try {
+        cmd = JSON.parse(raw);
+        id = cmd.id;
+        code = cmd.code;
+    } catch (e) {
+        writeAtomic(RESULT_PATH, buildResult(null, null, "parse: " + e, []));
+        return;
     }
 
-    dprint("[pkt-mcp] phase2 M1 iter2 done");
+    var logs = [];
+    dprint = function (msg) { logs.push(String(msg)); realDprint(msg); };
+    var result = null, error = null;
+    try {
+        result = eval(code);
+    } catch (e) {
+        error = String(e);
+    } finally {
+        dprint = realDprint;
+    }
+    writeAtomic(RESULT_PATH, buildResult(id, result, error, logs));
+}
+
+function poll() {
+    try {
+        if (!sfm.fileExists(CMD_PATH)) return;
+        var raw = sfm.getFileContents(CMD_PATH);
+        sfm.removeFile(CMD_PATH);
+        handleCommand(raw);
+    } catch (e) {
+        realDprint("[pkt-mcp] poll ERR: " + e);
+    }
+}
+
+function main() {
+    realDprint("[pkt-mcp] listener start, mailbox=" + MAILBOX);
+    sfm = ipc.systemFileManager();
+    if (!sfm.directoryExists(MAILBOX)) sfm.makeDirectory(MAILBOX);
+    try { sfm.removeFile(CMD_PATH); } catch (e) {}
+    try { sfm.removeFile(RESULT_PATH); } catch (e) {}
+    pollTimer = setInterval(poll, POLL_MS);
+    realDprint("[pkt-mcp] listener ready, poll=" + POLL_MS + "ms");
 }
 
 function cleanUp() {
-    dprint("[pkt-mcp] cleanUp");
+    if (pollTimer) {
+        try { clearInterval(pollTimer); } catch (e) {}
+        pollTimer = null;
+    }
+    realDprint("[pkt-mcp] listener stopped");
 }

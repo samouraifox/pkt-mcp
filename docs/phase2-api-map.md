@@ -72,6 +72,83 @@ strings $PT_HOME/bin/PacketTracer | grep -E '(Linksys-|WRT[0-9])'
 Bake this into the workflow for any future device type that doesn't accept
 its `<Name>-PT` generic.
 
-## M2..M6
+## M2 — R1 + SW1 on the canvas
+
+**Status:** done, via the bridge (see "Phase 2 interlude" below).
+
+The bridge invocation that landed M2:
+
+```python
+python tools/pkt_bridge.py '
+var win = ipc.appWindow();
+var lw = win.getActiveWorkspace().getLogicalWorkspace();
+var net = win.getActiveFile().getMainNetwork();
+var r1 = lw.addDevice(0, "2911", 200, 200);
+net.getDevice(r1).setName("R1");
+var sw1 = lw.addDevice(1, "2960-24TT", 400, 200);
+net.getDevice(sw1).setName("SW1");
+({r1: r1, sw1: sw1});
+'
+# -> {"r1": "Router0", "sw1": "Switch0"}
+```
+
+**Workspace baseline note.** A fresh PT logical workspace already contains a
+`Power Distribution Device0` (system entity for the IoE/power simulation
+features). `getDeviceCount()` therefore reads `1` on what looks like an empty
+workspace. Filter it out by name when iterating user-created devices.
+
+## Phase 2 interlude — file-polling bridge
+
+After M2 we paused milestone work to automate the GUI re-run loop. The PT
+Script Engine sandbox has neither `fetch` nor `XMLHttpRequest`, so the
+architecture-doc'd web-view-polls-HTTP design is deferred to Phase 3. For
+now we use a file-mailbox bridge that runs entirely from inside the SE.
+
+**Sandbox findings (relevant subset).**
+
+| primitive             | available? | notes                                  |
+|-----------------------|-----------:|----------------------------------------|
+| `fetch`, `XMLHttpRequest` | no     | sandboxed Qt Script, not a browser     |
+| `setTimeout` / `setInterval` | yes | event loop is real; timer fires        |
+| `eval`, `Function`    | yes        | both return correct values             |
+| `JSON.parse` / `stringify` | yes   | used by listener / driver              |
+| `ipc.systemFileManager` | yes      | returns the file manager object        |
+| `ipc.systemFileManager().getFileWatcher()` | yes | event-driven option for later if 500ms polling becomes a bottleneck |
+
+**`SystemFileManager` gotchas.**
+
+- `writeTextToFile(filename, contents64)` expects the *content* arg in
+  base64 — passing raw text silently no-ops (returns true, file ends up
+  garbage / empty).
+- `writePlainTextToFile(filename, contents)` is the plain-UTF-8 variant.
+  This is what the listener uses.
+- `moveSrcFileToDestFile(srcFile, destFile, bReplace)` takes **three** args;
+  the third is the overwrite flag. Pass `true` for our atomic-write protocol.
+- Tilde paths (`~/...`) are *not* expanded — write returns true, but
+  `fileExists` returns false. The mailbox lives at absolute `/tmp/pkt-mcp/`.
+- Doxygen reference for the full surface:
+  `$PT_HOME/help/default/IpcAPI/class_system_file_manager.html`.
+
+**Mailbox protocol.**
+
+```
+Python writes  /tmp/pkt-mcp/cmd.json.tmp,    renames to cmd.json
+SE     reads   /tmp/pkt-mcp/cmd.json,        deletes after read
+SE     writes  /tmp/pkt-mcp/result.json.tmp, renames to result.json
+Python reads   /tmp/pkt-mcp/result.json,     deletes after read
+```
+
+Command shape: `{"id": <str>, "code": <js source>}`.
+Result  shape: `{"id": <same>, "result": <jsonable>, "error": null|str, "logs": [<dprint strings>]}`.
+
+Listener: `pt-script-module/main.js`. Driver: `tools/pkt_bridge.py`. Poll
+interval is 500 ms in the SE, 50 ms on the Python side.
+
+**Going forward.** M3 onward send their probe code via `tools/pkt_bridge.py`.
+The only PT GUI step that remains is the one-time Stop/Start of the listener
+when `main.js` itself changes (which should be rare from here — the listener
+is stable code, milestone-specific JS rides through `cmd.json`).
+
+## M3..M6
 
 _Stubbed; populate after each milestone lands._
