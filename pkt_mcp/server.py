@@ -14,9 +14,11 @@ Run:
 
 from __future__ import annotations
 
+import ipaddress
 import os
+import re
 import sys
-from typing import Any
+import time
 
 from mcp.server.fastmcp import FastMCP
 from mcp.server.fastmcp.exceptions import ToolError
@@ -28,7 +30,7 @@ sys.path.insert(
     0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "tools")
 )
 
-from pkt_bridge import Bridge, BridgeError  # noqa: E402
+from pkt_bridge import Bridge, BridgeError, PtNotFound  # noqa: E402
 
 mcp = FastMCP("pkt-mcp")
 
@@ -51,6 +53,80 @@ def _call(fn, *args, **kwargs):
         # Mailbox round-trip never completed — usually means the SE
         # listener isn't running. Surface as its own kind.
         raise ToolError(f"BRIDGE_TIMEOUT: {e}") from e
+
+
+# ── helper-tool support ──────────────────────────────────────────────────
+
+_HOST_TYPES = frozenset({"PC", "SERVER"})
+_SWITCH_TYPES = frozenset({"SWITCH"})
+
+# Curated port probe sets for summarize_topology. There's no list_ports op
+# yet, so we probe a small fixed set per device type and silently skip
+# ports that don't exist (PtNotFound). For the demo topologies Phase 4
+# targets, these cover everything; high-port-number switches (Fa0/9+) need
+# explicit get_port_state calls. Add a list_ports JS op in a later phase
+# if this becomes a real limitation.
+_PORT_PROBE: dict[str, list[str]] = {
+    "ROUTER":          [f"GigabitEthernet0/{i}" for i in range(3)] +
+                       [f"Serial0/0/{i}" for i in range(2)] +
+                       [f"FastEthernet0/{i}" for i in range(2)],
+    "SWITCH":          [f"FastEthernet0/{i}" for i in range(1, 9)] +
+                       ["GigabitEthernet0/1", "GigabitEthernet0/2"],
+    "PC":              ["FastEthernet0"],
+    "SERVER":          ["FastEthernet0"],
+    "WIRELESS_ROUTER": ["Internet", "Ethernet1", "Ethernet2",
+                        "Ethernet3", "Ethernet4"],
+    "HUB":             [],
+}
+
+
+def _ensure_device_type(name: str) -> str | None:
+    """Look up a device's type from the Bridge cache; refresh from PT if
+    the cache misses (the cache is populated by add_device, but devices
+    placed in a previous session aren't there until list_devices runs)."""
+    t = _bridge._device_types.get(name)
+    if t is None:
+        try:
+            _bridge.list_devices()
+        except BridgeError:
+            return None
+        t = _bridge._device_types.get(name)
+    return t
+
+
+def _last_ping_section(output: str, target: str) -> str:
+    """Slice the buffer to the most recent `Pinging <target>` header so a
+    retry isn't fooled by an earlier successful batch still in scrollback."""
+    idx = output.rfind(f"Pinging {target}")
+    return output[idx:] if idx >= 0 else output
+
+
+_PING_SUMMARY_RE = re.compile(
+    r"Sent\s*=\s*(\d+),\s*Received\s*=\s*(\d+),"
+    r"\s*Lost\s*=\s*(\d+)\s*\((\d+)%\s*loss\)"
+)
+
+
+def _parse_ping_summary(section: str) -> tuple[int, int, int, int] | None:
+    """(sent, received, lost, loss_pct) or None if PT hasn't printed the
+    summary line yet — caller polls again."""
+    m = _PING_SUMMARY_RE.search(section)
+    if not m:
+        return None
+    return (int(m.group(1)), int(m.group(2)),
+            int(m.group(3)), int(m.group(4)))
+
+
+def _subnet_of(ip: str | None, mask: str | None) -> str | None:
+    """e.g. ("192.168.1.1", "255.255.255.0") -> "192.168.1.0/24". Returns
+    None on garbage input rather than raising — the data comes from PT."""
+    if not ip or not mask:
+        return None
+    try:
+        net = ipaddress.IPv4Network(f"{ip}/{mask}", strict=False)
+    except (ValueError, ipaddress.AddressValueError, ipaddress.NetmaskValueError):
+        return None
+    return str(net)
 
 
 # ── plumbing ─────────────────────────────────────────────────────────────
@@ -119,9 +195,15 @@ def delete_device(name: str) -> dict:
 
 @mcp.tool()
 def connect(
-    dev_a: str, port_a: str, dev_b: str, port_b: str, cable_type: str
+    dev_a: str,
+    port_a: str,
+    dev_b: str,
+    port_b: str,
+    cable_type: str,
+    auto_portfast: bool = True,
 ) -> dict:
-    """Create a cable link between two device ports.
+    """Create a cable link between two device ports, with optional
+    spanning-tree portfast auto-configuration on switch↔host links.
 
     Args:
         dev_a, port_a: First endpoint. Port names are the canonical PT
@@ -135,10 +217,22 @@ def connect(
                     "FIBER" (fiber-optic), "SERIAL" (DTE-DCE serial),
                     "AUTO" (let PT pick), "WIRELESS", plus the rest of
                     the PT cable enum.
+        auto_portfast: If True (default) AND exactly one endpoint is a
+                       SWITCH AND the other is a host (PC/SERVER), the
+                       switch port is automatically taken into IOS config
+                       mode and `spanning-tree portfast` is applied. This
+                       skips the ~30s STP listening+learning convergence
+                       on access ports — without it, the first ping
+                       attempts after a switch↔host link drop entirely.
+                       The ping helper still retries on STP loss as a
+                       belt-and-suspenders, but portfast removes the
+                       wait for the common case. Set False to skip
+                       (e.g. for trunk ports or non-host endpoints).
 
-    Returns: {"ok": true}. Raises PT_REJECTED if the link can't be made
-    (port already linked, type mismatch, etc.) or PT_NOT_FOUND if a
-    device or port name is wrong.
+    Returns: {"ok": true, "auto_portfast_applied": <bool>,
+              "portfast_target": "<switch>/<port>"|null}. Raises
+    PT_REJECTED if the link can't be made (port already linked, type
+    mismatch, etc.) or PT_NOT_FOUND if a device or port name is wrong.
 
     Notes: Right after connecting a router port the link will visually
     appear red on the router end — that's the router's interface being
@@ -150,7 +244,44 @@ def connect(
         dev_b=dev_b, port_b=port_b,
         cable_type=cable_type,
     )
-    return {"ok": True}
+
+    portfast_target = None
+    if auto_portfast:
+        a_type = _ensure_device_type(dev_a)
+        b_type = _ensure_device_type(dev_b)
+        switch_dev, switch_port = None, None
+        if a_type in _SWITCH_TYPES and b_type in _HOST_TYPES:
+            switch_dev, switch_port = dev_a, port_a
+        elif b_type in _SWITCH_TYPES and a_type in _HOST_TYPES:
+            switch_dev, switch_port = dev_b, port_b
+
+        if switch_dev:
+            try:
+                for cmd in (
+                    "enable",
+                    "configure terminal",
+                    f"interface {switch_port}",
+                    "spanning-tree portfast",
+                    "exit",
+                    "end",
+                ):
+                    _bridge.run_command(switch_dev, cmd, terminal="ios")
+            except BridgeError as e:
+                # Link landed but portfast didn't — surface as ToolError
+                # so the LLM knows the side-effect failed, but include
+                # which side was being configured.
+                raise ToolError(
+                    f"connect: link OK, but auto_portfast on "
+                    f"{switch_dev}/{switch_port} failed: "
+                    f"{e.error_type}: {e}"
+                ) from e
+            portfast_target = f"{switch_dev}/{switch_port}"
+
+    return {
+        "ok": True,
+        "auto_portfast_applied": portfast_target is not None,
+        "portfast_target": portfast_target,
+    }
 
 
 @mcp.tool()
@@ -316,6 +447,220 @@ def save_pkt(path: str) -> dict:
     GUI. Also doesn't pop a Save As dialog. Relative paths are rejected
     with BAD_ARGS to prevent the file landing in PT's CWD."""
     return _call(_bridge.save, path)
+
+
+# ── ergonomic helpers ────────────────────────────────────────────────────
+
+
+@mcp.tool()
+def ping(
+    from_device: str,
+    to_ip: str,
+    count: int = 4,
+    retries: int = 2,
+) -> dict:
+    """Send ICMP echoes from a host (or router) to an IP and return a
+    structured pass/fail result.
+
+    Args:
+        from_device: Source device (typically a PC, but a router with
+                     `ping` in privileged-exec works too — terminal kind
+                     auto-dispatches from the device's cached type).
+        to_ip: Destination IPv4 address as a dotted quad.
+        count: Number of echoes to send. Defaults to 4 (PT's default).
+               When != 4, the tool sends `ping -n <count> <ip>` (Windows
+               desktop syntax); when == 4, it sends a bare `ping <ip>`
+               for maximum compatibility.
+        retries: How many times to re-issue the ping on TOTAL packet loss
+                 (0/N replies). Defaults to 2 — i.e. 1 initial attempt +
+                 up to 2 retries. Total loss usually means STP is still
+                 converging on a switch access port; one retry typically
+                 clears it. Partial loss (1/4, 2/4, …) is treated as a
+                 real network issue and is NOT retried — it returns
+                 success=False with the observed counts.
+
+    Returns:
+        {
+          "success":         <bool>,           # True iff lost == 0
+          "sent":            <int|null>,
+          "received":        <int|null>,
+          "lost":            <int|null>,
+          "packet_loss_pct": <int|null>,       # 0-100
+          "attempts":        <int>,            # how many batches were sent
+          "output":          "<the relevant ping section>"
+        }
+
+    Raises BRIDGE_TIMEOUT if the SE listener never responds, or
+    PT_NOT_FOUND if from_device is unknown to PT.
+
+    Notes: Avoids the classic substring trap — `"0% loss"` is also a
+    substring of `"100% loss"`, so we check `Lost = 0` instead. Buffer
+    parsing slices to the most recent `Pinging <ip>` header so retries
+    don't get fooled by an earlier successful batch in scrollback."""
+    cmd = f"ping {to_ip}" if count == 4 else f"ping -n {count} {to_ip}"
+    deadline_per_attempt = 15.0
+    poll_s = 0.5
+    max_attempts = 1 + max(0, retries)
+
+    section = ""
+    summary: tuple[int, int, int, int] | None = None
+    attempts_done = 0
+
+    try:
+        for attempts_done in range(1, max_attempts + 1):
+            _bridge.run_command(from_device, cmd)
+            end = time.time() + deadline_per_attempt
+            summary = None
+            while time.time() < end:
+                resp = _bridge.run_command(from_device, "")
+                section = _last_ping_section(resp["output"], to_ip)
+                summary = _parse_ping_summary(section)
+                if summary is not None:
+                    break
+                time.sleep(poll_s)
+
+            if summary is None:
+                # No summary line within deadline — retry.
+                continue
+
+            sent, received, lost, pct = summary
+            if lost == 0:
+                return {
+                    "success": True,
+                    "sent": sent,
+                    "received": received,
+                    "lost": lost,
+                    "packet_loss_pct": pct,
+                    "attempts": attempts_done,
+                    "output": section.strip(),
+                }
+            # Partial loss: don't mask a real problem with retries.
+            if received > 0:
+                break
+            # Total loss: loop and retry (STP convergence absorber).
+    except BridgeError as e:
+        raise ToolError(f"{e.error_type}: {e}") from e
+    except TimeoutError as e:
+        raise ToolError(f"BRIDGE_TIMEOUT: {e}") from e
+
+    if summary is None:
+        sent = received = lost = pct = None
+    else:
+        sent, received, lost, pct = summary
+    return {
+        "success": False,
+        "sent": sent,
+        "received": received,
+        "lost": lost,
+        "packet_loss_pct": pct,
+        "attempts": attempts_done,
+        "output": section.strip(),
+    }
+
+
+@mcp.tool()
+def summarize_topology() -> str:
+    """Return a markdown snapshot of the current PT canvas: devices,
+    active ports (those with an IP or a link), and inferred subnets.
+
+    Use this to orient yourself in one call before reasoning about a
+    topology — saves making N separate list_devices + get_port_state
+    round-trips. The output is meant to be read by an LLM, not parsed:
+    it's a markdown report.
+
+    Returns: A markdown-formatted string. Empty workspace renders as
+    "Topology: empty workspace.".
+
+    Notes: There's no list_ports op yet; this helper probes a curated
+    set of port names per device type and skips any that don't exist.
+    For switches it covers FastEthernet0/1..0/8 + GigabitEthernet0/1..0/2,
+    which is enough for typical demo topologies but truncates large
+    24/48-port deployments. For ports outside that range, fall back to
+    explicit get_port_state. Routers, PCs, servers, and wireless routers
+    have their full standard port layouts probed."""
+    try:
+        devices = _bridge.list_devices()
+    except BridgeError as e:
+        raise ToolError(f"{e.error_type}: {e}") from e
+    except TimeoutError as e:
+        raise ToolError(f"BRIDGE_TIMEOUT: {e}") from e
+
+    if not devices:
+        return "Topology: empty workspace."
+
+    # Probe ports per device.
+    port_rows: list[dict] = []
+    for d in devices:
+        dtype = d.get("type") or ""
+        probe = _PORT_PROBE.get(dtype, [])
+        for port_name in probe:
+            try:
+                state = _bridge.get_port_state(d["name"], port_name)
+            except PtNotFound:
+                continue  # port doesn't exist on this model — silent skip
+            except BridgeError:
+                continue
+            ip = state.get("ip")
+            link = state.get("link")
+            # Only include ports that show signs of life.
+            if not ip and not link:
+                continue
+            port_rows.append({
+                "device": d["name"],
+                "port":   port_name,
+                "ip":     ip,
+                "mask":   state.get("mask"),
+                "up":     state.get("up"),
+                "proto":  state.get("protocol_up"),
+                "link":   link,
+            })
+
+    # Group active IP'd ports by subnet.
+    subnets: dict[str, list[tuple[str, str]]] = {}
+    for r in port_rows:
+        subnet = _subnet_of(r["ip"], r["mask"])
+        if subnet:
+            subnets.setdefault(subnet, []).append((r["device"], r["ip"]))
+
+    # ── render markdown ─────────────────────────────────────────────────
+    lines: list[str] = []
+    lines.append("# Topology snapshot\n")
+    lines.append(
+        f"{len(devices)} device(s), {len(port_rows)} active port(s), "
+        f"{len(subnets)} subnet(s).\n"
+    )
+
+    lines.append("## Devices\n")
+    lines.append("| Name | Type | Model | Position |")
+    lines.append("|------|------|-------|----------|")
+    for d in devices:
+        x, y = d.get("x"), d.get("y")
+        pos = f"({x:.0f}, {y:.0f})" if x is not None and y is not None else "—"
+        lines.append(
+            f"| {d.get('name','')} | {d.get('type','')} | "
+            f"{d.get('model','') or '—'} | {pos} |"
+        )
+
+    if port_rows:
+        lines.append("\n## Active ports\n")
+        lines.append("| Device | Port | IP | Up/Proto | Linked |")
+        lines.append("|--------|------|------|----------|--------|")
+        for r in port_rows:
+            ip_str = f"{r['ip']}/{r['mask']}" if r["ip"] and r["mask"] else (r["ip"] or "—")
+            up = "up" if r["up"] else ("down" if r["up"] is False else "?")
+            pr = "up" if r["proto"] else ("down" if r["proto"] is False else "?")
+            linked = "yes" if r["link"] else "no"
+            lines.append(
+                f"| {r['device']} | {r['port']} | {ip_str} | {up}/{pr} | {linked} |"
+            )
+
+    if subnets:
+        lines.append("\n## Subnets\n")
+        for subnet, members in sorted(subnets.items()):
+            members_str = ", ".join(f"{dev} ({ip})" for dev, ip in members)
+            lines.append(f"- **{subnet}** — {members_str}")
+
+    return "\n".join(lines) + "\n"
 
 
 def main() -> None:
