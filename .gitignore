@@ -1,0 +1,28 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+.uv/
+dist/
+build/
+*.egg-info/
+
+# Java
+target/
+*.class
+*.jar
+
+# IDE
+.idea/
+.vscode/
+*.iml
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Project
+output/*.pkt
+output/*.xml
+*.log
+pt-bridge/lib/*.jar
