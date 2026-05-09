@@ -185,47 +185,130 @@ clear successor strategy:
 
 This becomes Sub-spike 1B.
 
-## Sub-spike 1B — Script Module path (in progress)
+## Sub-spike 1B — Script Module path (SUCCESS)
 
-### Plan
+Loaded `pt-script-module/main.js` into a new PT Script Module
+(`Extensions → Scripting → New PT Script Module`), exported to
+`~/pt/extensions/pkt-mcp-bridge.pts`, registered as a persistent module, started.
 
-Two-step validation, smallest first.
+After granting privileges (see below) and switching the device-type argument from a
+name string to the C-IPC enum int, the spike succeeded:
 
-**Step 1 — prove Script Module can manipulate the network at all.**
-Minimal Script Module body:
-
-```js
-function main() {
-  var workspace = appWindow.getActiveWorkspace();
-  var logical  = workspace.getLogicalWorkspace();
-  var name = logical.addDevice(DeviceType.ROUTER, "2911", 200, 200);
-  var net  = appWindow.getActiveFile().getMainNetwork();
-  net.getDevice(name).setName("R1");
-  dprint("OK created=" + name + " renamed=R1");
-}
-function cleanUp() {}
+```
+[pkt-mcp] start
+[pkt-mcp] typeof ipc=object typeof DeviceType=undefined typeof appWindow=undefined
+[pkt-mcp] ipc.network() ok, deviceCount=0
+[pkt-mcp] ipc.appWindow() ok
+[pkt-mcp] getActiveWorkspace() ok
+[pkt-mcp] getLogicalWorkspace() ok
+[pkt-mcp] addDevice returned: Router0
+[pkt-mcp] OK created=Router0 renamed=R1
 ```
 
-User loads via `Extensions → Scripting → New PT Script Module`, pastes into the Script
-Files tab, hits `Start`. R1 should appear on the canvas. If it does, the API surface is
-real and the architecture is unblocked.
+Visual confirmation: a Cisco 2911 labeled **R1** appeared in the logical workspace at
+~(200, 300) px. (Position drifts slightly from the requested 200, 200 because PT
+auto-snaps device origin; the exact offset comes from the icon's anchor point — not
+load-bearing.)
 
-**Step 2 — prove webview ↔ external HTTP works.**
-Once Step 1 succeeds, layer a webview that fetches a JSON command from a Python server
-running on `localhost:PORT` and forwards each command to the Script Engine via
-`$seev(...)`. (Step 2 is not needed to declare 1B successful — it's the next-phase work.)
+### What the Script Engine actually exposes (resolved)
 
-### Open questions to resolve in PT GUI
+- `ipc` is a **global object**. `appWindow`, `network`, `DeviceType` are NOT bare
+  globals — go through `ipc`.
+- `ipc.network()` → `Network` (read-only deviceCount/getDevice).
+- `ipc.appWindow()` → `AppWindow`.
+- `appWindow.getActiveWorkspace()` → `Workspace`.
+- `workspace.getLogicalWorkspace()` → `LogicalWorkspace` (the surface that supports
+  `addDevice`, `removeDevice`, `createLink`).
+- `appWindow.getActiveFile().getMainNetwork()` → `Network` (write-capable: lets us
+  resolve the auto-name returned by `addDevice` and call `setName`).
+- IPC calls in the **Script Engine** are synchronous — they return the result directly
+  (no Promise/await needed). The async pattern only applies to web views via `$seev()`.
 
-- Is `appWindow` available as a global in the Script Engine, or do we need to obtain it
-  via `ipc.appWindow()` / `ipc.getAppWindow()`? Docs use `ipc.network()...` style for the
-  network, suggesting `ipc.*` is the global root.
-- What `DeviceType` lookup is exposed to JS — `DeviceType.ROUTER`, `IPC.DeviceType.ROUTER`,
-  or a numeric int?
-- Are `IPC calls` synchronous or async from the script-engine side? (From web views they
-  are async.)
+### `addDevice` signature, exactly as the engine wants it
 
-These three only resolve once a Script Module is actually loaded and we can `dprint`
-the type of each global. The minimal test above is also a probe.
+```js
+var name = lw.addDevice(devTypeInt, modelString, xPx, yPx);
+//                       ^int        ^string      ^double, ^double
+// returns: string — PT's auto-assigned device name (e.g. "Router0").
+```
 
-## Sub-spike 1C — NetconRestAPI (pending 1B result)
+- **First arg must be the integer enum value, not a name string.** Strings produce
+  `IPC Call ERROR: LogicalWorkspace - Invalid arguments for IPC call "addDevice"`.
+- Model string for PT 9 of the Cisco 2911 router: `"2911"`. (Did not have to fall back
+  to `"ISR2911"`.)
+- Coordinates: **absolute pixels in the logical workspace**, not normalized [0,1] and
+  not grid cells. This matters for the future MCP `place_device(x, y)` tool — values
+  like `(200, 200)` work; small canvas, common values are roughly `0..1500` x `0..900`.
+
+### `DeviceType` integer mapping (extracted from `pt-cep-java-framework-9.0.0.0.jar` → `com.cisco.pt.ipc.enums.DeviceType.class`)
+
+Confirmed-working: `0` for the Cisco 2911 router. The remaining values come from the
+same `<clinit>` block (decompiled with `javap -c`):
+
+| int | enum                            |
+|-----|---------------------------------|
+| 0   | ROUTER                          |
+| 1   | SWITCH                          |
+| 2   | CLOUD                           |
+| 3   | BRIDGE                          |
+| 4   | HUB                             |
+| 5   | REPEATER                        |
+| 6   | CO_AXIAL_SPLITTER               |
+| 7   | ACCESS_POINT                    |
+| 8   | PC                              |
+| 9   | SERVER                          |
+| 10  | PRINTER                         |
+| 11  | WIRELESS_ROUTER                 |
+| 12  | IP_PHONE                        |
+| 13  | DSL_MODEM                       |
+| 14  | CABLE_MODEM                     |
+| 15  | REMOTE_NETWORK                  |
+| 16  | MULTI_LAYER_SWITCH              |
+| 17  | SWITCH3650                      |
+| 18  | LAPTOP                          |
+| 19  | TABLET_PC                       |
+| 20  | PDA                             |
+| 21  | WIRELESS_END_DEVICE             |
+| 22  | WIRED_END_DEVICE                |
+
+**Known unknown:** the Java enum has 50+ entries; only 0-22 are decoded above (those
+are what `javap -c` printed in the first window). The rest (ASA, ANALOG_PHONE, HOME_GATEWAY,
+HOME_VOIP, ANTENNA-related, IoT THING, MERAKI_*, IO_E, MCU, PLC, NETWORK_CONTROLLER, SBC,
+SECURITY_APPLIANCE, SNIFFER, WIRELESS_LAN_CONTROLLER, ...) need their integer values
+extracted before Phase 2 builds the full device-type table for the MCP tool surface.
+Re-run `javap -c` on `DeviceType.class` and finish the table when needed.
+
+### Privilege the Script Module needs
+
+In the General tab → Security section, **Change Network Info** (`PrivChangeNetwork`)
+is required for `addDevice` / `setName` to succeed. Without it:
+
+```
+IPC Call ERROR: LogicalWorkspace - ExApp or Script Module does not have the necessary
+privilege for IPC call "getLogicalWorkspace"
+```
+
+For the spike I ticked all 11 privilege boxes (Application / Multiuser / Simulation /
+Activity / IPC / User Preferences / File Operations / Get Network Info / Miscellaneous
+UI / Change User Interface / Change Network Info) — none of the broader ones cause
+issues, and several will be needed anyway in Phase 2 (e.g. `Application` to drive the
+canvas viewport, `File Operations` to trigger save/export). Future Script Modules built
+from this codebase should default to the same wide grant; narrow it later if needed.
+
+### Operational notes
+
+- PT 9's editor enforces **Export → register-as-persistent → Start**. There is no "run
+  this in-place" affordance — `Start` is greyed out for unsaved modules. So the dev
+  loop is: edit `main.js` → in PT's editor `Import` (or paste) → `Save` → `Export` over
+  the same `.pts` → `Stop` if running → `Start`. The encrypted `.pts` is a build
+  artifact; the `.js` is source-of-truth.
+- The dprint output goes to `Extensions → Scripting → Debug Dialog`, filtered by
+  module ID.
+- Restarting PT picks up the registered `.pts` automatically (its path is saved in
+  `~/pt/PT*.conf`).
+
+## Sub-spike 1C — NetconRestAPI (NOT ATTEMPTED)
+
+1B succeeded, so 1C was skipped. If a future need arises (e.g. a use case that benefits
+from a REST endpoint independent of the Script Module), open
+`$PT_HOME/help/default/NetconRestAPI/index.html` and continue from there.

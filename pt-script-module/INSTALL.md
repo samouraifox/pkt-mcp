@@ -17,24 +17,23 @@ PT Script Module → Edit`.)
 - Leave both password fields blank.
 - **Startup**: `On Demand` (we'll start it manually for the test).
 
-## 3. Script Files tab
+## 3. Script Engine tab (this is where the JS goes)
 
-1. Click **Add** → name it `main.js`.
+PT 9's tabs are: Info / General / **Script Engine** / Custom Interfaces / Data
+Store. Click **Script Engine**.
+
+1. Click **Add** → name the file `main.js`.
 2. Open `pt-script-module/main.js` from this repo, copy the whole file, and
    paste it into the editor in PT.
-3. Click **Save** in the Scripting Interface (this creates a `.pts` somewhere
-   under `~/pt/extensions/` or wherever PT prompts you — that path is a build
+3. Click **Save** in the Scripting Interface (PT will pick a location under
+   `~/pt/extensions/` for the encrypted `.pts` — that path is a build
    artifact, not source).
 
-## 4. Security tab — request the privilege we need
+## 4. Privileges
 
-The Script Module needs permission to mutate the network before
-`logical.addDevice(...)` will work. In the Security tab, request:
-
-- `PrivChangeNetwork` (Change Network)
-
-If PT lists more granular options, also tick anything obviously related to
-"add device" / "modify topology". Save again.
+PT 9 has no separate Security tab in this dialog. Privileges are prompted
+at runtime: if a popup asks you to allow this Script Module to change the
+network, accept it.
 
 ## 5. Run it
 

@@ -38,10 +38,10 @@ function main() {
 
     // Probe 3: add a Cisco 2911 router and rename it to R1.
     try {
-        var devType =
-            (typeof DeviceType !== "undefined" && DeviceType.ROUTER !== undefined)
-                ? DeviceType.ROUTER
-                : "ROUTER";
+        // PT's IPC engine wants the int value of the C++ DeviceType enum, not a name
+        // string. Confirmed from the framework JAR: ROUTER=0, SWITCH=1, CLOUD=2,
+        // BRIDGE=3, HUB=4, REPEATER=5, AP=7, PC=8, SERVER=9, ...
+        var devType = 0;
         var name = lw.addDevice(devType, "2911", 200, 200);
         dprint("[pkt-mcp] addDevice returned: " + name);
 
