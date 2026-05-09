@@ -226,6 +226,121 @@ internal.
 `lw.deleteLink(deviceName, portName)` removes the link incident to the
 named port. Useful when re-running a milestone without restarting PT.
 
-## M4..M6
+## M4 — copper-straight link R1 ↔ SW1 on G0/0 ↔ Fa0/1
+
+**Status:** absorbed into M3 (commit `505b2bf`).
+
+The original plan separated M3 (discover the link API) from M4 (apply it to
+the canonical R1↔SW1 pair). Doxygen handed us the full `createLink`
+contract on the first read, so the verification call **was** the M4
+deliverable — there was nothing left to apply. The green-link assertion M4
+implied lands at M5 once `no shutdown` clears the admin-down state on R1.
+
+## M5 — CLI configuration API
+
+**Status:** done. R1 G0/0 configured to `192.168.1.1/24`, admin-up, line
+protocol up. Verified through the API; visual green link to SW1 expected.
+
+### Working API for sending commands
+
+```js
+var tl = device.getCommandLine();   // returns a TerminalLine
+tl.enterCommand("<single line of CLI input>");
+tl.getPrompt();                      // current prompt string, e.g. "Router(config-if)#"
+tl.getMode();                        // current mode tag, e.g. "user", "enable", "global", "intG"
+```
+
+- `Device.getCommandLine()` returns a per-device `TerminalLine`. (Doxygen:
+  `class_terminal_line.html`.)
+- `enterCommand(string)` sends **one** logical input line (no embedded
+  newlines). Treat it like the user pressing Enter once.
+- The terminal name is `con0` — i.e. this is the **console line**, not VTY.
+  It does not require an authenticated SSH/telnet session.
+- Helpful introspection while scripting: `getPrompt()`, `getMode()`,
+  `getCurrentHistory()`, `getConfigHistory()`, `getCommandInput()`.
+
+### Mode transitions are NOT automatic
+
+We must drive the IOS state machine ourselves — one Cisco command per
+`enterCommand` call. Commands and the mode they leave the terminal in:
+
+| command                             | resulting `getMode()` | resulting prompt    |
+|-------------------------------------|-----------------------|---------------------|
+| (empty / Enter)                     | `user`                | `Router>`           |
+| `enable`                            | `enable`              | `Router#`           |
+| `configure terminal`                | `global`              | `Router(config)#`   |
+| `interface GigabitEthernet0/0`      | `intG`                | `Router(config-if)#`|
+| `ip address 192.168.1.1 255.255.255.0` | `intG` (no transition) | `Router(config-if)#` |
+| `no shutdown`                       | `intG` (no transition) | `Router(config-if)#` |
+| `end`                               | `enable`              | `Router#`           |
+
+### Send commands one-at-a-time, not as a block
+
+**Critical pacing rule.** Chaining many `enterCommand` calls inside a
+single bridge eval — even with no apparent delay between them — races the
+IOS simulator: PT processes ~the first one or two and the rest are
+silently lost (terminal even rolled to `mode=logout`, `prompt=""` in our
+first chained attempt). The reliable pattern is **one `enterCommand` per
+bridge call**, with `getPrompt()` / `getMode()` checked between to confirm
+the transition landed.
+
+For Phase 4's MCP tool, the natural shape is therefore one
+`configure_interface(...)` MCP call → many sequential `enterCommand`
+roundtrips inside Python, not one big JS payload. (Or queue commands
+inside the SE listener with `setTimeout` between, but no need for that
+yet.)
+
+### Initial-boot dialog
+
+A freshly-added Cisco router boots into the **System Configuration
+Dialog** (`"Would you like to enter the initial configuration dialog?
+[yes/no]: "`, `mode=""`). Send `enterCommand("no")` once to skip it before
+any other commands. Future `add_device(router)` flows should bake this in.
+
+### Reading config back
+
+There is no `getRunningConfig()` on the JS API. Practical alternatives:
+
+1. **Port-level introspection (used for M5 verification).** `Port` exposes
+   structural getters that *are* the running-config view for that
+   interface:
+     - `getIpAddress()` / `getSubnetMask()`
+     - `isPortUp()` (admin state) / `isProtocolUp()` (line protocol)
+     - `getMacAddress()`, `getMtu()`, `getBandwidth()`, `getDescription()`
+     - `getOspfCost()`, `getOspfHelloInterval()`, OSPF/EIGRP/RIP details
+     - `getIpv6Addresses()`, `getNatMode()`, `getAclInID()`/`getAclOutID()`
+2. **Issue `show running-config` via `enterCommand`.** Reading the output
+   back requires registering for `TerminalLine.outputWritten(string, bool,
+   int)` events — not needed for Phase 2 since structural getters cover
+   the verification we want.
+3. **`Device.getStartupFile()` / `setStartupFile()`** exists and is the
+   path for persisting startup-config; haven't probed its content shape
+   yet (not in scope for M5).
+
+### M5 verified end-to-end
+
+```
+no  → enable → configure terminal → interface GigabitEthernet0/0
+    → ip address 192.168.1.1 255.255.255.0 → no shutdown → end
+```
+
+Final state per the bridge:
+
+```json
+{
+  "ip":         "192.168.1.1",
+  "mask":       "255.255.255.0",
+  "portUp":     true,
+  "protocolUp": true,
+  "prompt":     "Router#",
+  "mode":       "enable"
+}
+```
+
+`portUp && protocolUp` ⇒ R1 G0/0 is up/up. SW1 Fa0/1 was already up/up by
+default. The cable rendering in the canvas should resolve from
+red-triangles to solid green now.
+
+## M6
 
 _Stubbed; populate after each milestone lands._
