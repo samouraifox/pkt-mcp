@@ -65,3 +65,42 @@ HTTP-poll bridge.
 
 If `addDevice` failed but earlier probes succeeded, also note any prompt PT
 showed about privileges or signing — that's likely the next thing to fix.
+
+---
+
+## Refreshing after edits to `main.js` or `api.js`
+
+The body above is the *first-time install* (Phase 1B). The current bundle
+has TWO files in the Script Engine — `main.js` (dispatcher / mailbox
+listener) and `api.js` (typed op handlers, Phase 3+). When you edit either
+file on disk, the encrypted `.pts` PT loaded does NOT auto-update — PT runs
+its baked-in copy. To refresh:
+
+1. **Extensions → Scripting → Configure PT Script Module → pkt-mcp Bridge**
+2. Click **Stop**.
+3. **Edit** → in the Script Engine tab, for **each changed file**, paste
+   the latest source from this repo's `pt-script-module/`. Both files must
+   exist in the bundle: `main.js` first, `api.js` second (load order
+   doesn't matter at run time, but keep them named exactly that — `main.js`
+   is what PT calls on `Start`).
+4. Click **Save** — PT re-Exports the encrypted `.pts`.
+5. Click **Start**.
+
+**Verify the bundle is the version on disk:**
+
+```
+uv run python -c 'from tools.pkt_bridge import Bridge; print(Bridge(timeout=5).list_devices())'
+```
+
+A response (even `[]`) means the dispatcher is loaded. `TimeoutError` means
+the listener didn't start — recheck Steps 1-5.
+
+**Two symptoms that always mean "stale bundle, reload it":**
+
+- A typed op returns `"... not implemented yet — Step N probe pending"`.
+  That's a Phase 3-era stub; on-disk `api.js` has the real handler.
+- An op fails with `UNKNOWN_OP` for an op that exists in `api.js`'s
+  `DISPATCH` table.
+
+This is the only manual GUI step in the project. Flag it loudly when
+something looks wrong rather than chasing the symptom further.

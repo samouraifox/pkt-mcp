@@ -75,8 +75,16 @@ function isSystemDevice(name) {
 // instead and only proceed when the expected transition has actually
 // landed (the M5 race rule, properly handled this time).
 var POLL_MS_INNER = 100;
-var BOOT_DIALOG_DEADLINE_MS = 30000;   // PT IOS boot is slow on first start
-var IOS_MODE_DEADLINE_MS = 8000;
+var BOOT_DIALOG_DEADLINE_MS = 60000;   // PT IOS boot is slow on first start;
+                                       // bumped from 30s for back-to-back router
+                                       // adds (phase 4.5 medium-test feedback #1)
+var ROUTER_BOOT_PHASE_MS    = 30000;   // post-dialog "Press RETURN" + user-mode
+                                       // transitions; was sharing the 8s
+                                       // IOS_MODE_DEADLINE_MS until phase 4.5,
+                                       // tight under multi-router boot load
+var IOS_MODE_DEADLINE_MS    = 8000;    // intra-config IOS mode transitions
+                                       // (configure_interface) — these are fast
+                                       // even under load; keep snappy
 var SAVE_DEADLINE_MS = 10000;          // fileSaveAsNoPrompt writes async
 
 // ─── error helper ────────────────────────────────────────────────────────
@@ -245,14 +253,13 @@ function op_add_device(args, done) {
     }
     dev.setName(name);
 
-    if (typeStr !== "ROUTER") {
+    // Non-IOS devices (PC/Server/Hub) are ready as soon as addDevice returns.
+    if (typeStr !== "ROUTER" && typeStr !== "SWITCH" && typeStr !== "WIRELESS_ROUTER") {
         return { uuid: String(uuid), name: name };
     }
 
-    // Routers boot into the System Configuration Dialog (M5). PT IOS takes
-    // 1-3 s to even reach the dialog prompt, so a fixed setTimeout doesn't
-    // work — we have to poll for the dialog to actually appear before
-    // sending "no", then poll for the resulting transition into user mode.
+    // Shared CLI introspection helpers (used by both the SWITCH boot-wait
+    // and the ROUTER dialog-skip + boot-wait below).
     function tlFor(dev) {
         try { return (typeof dev.getCommandLine === "function") ? dev.getCommandLine() : null; }
         catch (e) { return null; }
@@ -260,6 +267,52 @@ function op_add_device(args, done) {
     function modeOf(tl) { try { return (tl && tl.getMode) ? tl.getMode() : ""; } catch (e) { return ""; } }
     function promptOf(tl) { try { return (tl && tl.getPrompt) ? tl.getPrompt() : ""; } catch (e) { return ""; } }
 
+    // SWITCH and WIRELESS_ROUTER: no boot dialog, but the CLI takes a few
+    // seconds to reach user/enable mode after addDevice. Phase 4.5 medium-
+    // test feedback #5: connect()'s auto_portfast immediately CLI'd a fresh
+    // switch and the IOS commands silently failed because the prompt was
+    // still at boot output. add_device's contract is "returned device is
+    // CLI-ready" — wait for it.
+    if (typeStr !== "ROUTER") {
+        pollUntil(
+            function () {
+                var t = tlFor(dev);
+                if (!t) return false;
+                var m = modeOf(t);
+                return (m === "user" || m === "enable");
+            },
+            { interval_ms: POLL_MS_INNER, deadline_ms: ROUTER_BOOT_PHASE_MS },
+            function () { done({ uuid: String(uuid), name: name }, null); },
+            function () {
+                // Defensive: try a single Enter (some switch builds park
+                // briefly at "Press RETURN") and re-poll once.
+                try {
+                    var t = tlFor(dev);
+                    if (t && typeof t.enterCommand === "function") t.enterCommand("");
+                } catch (e) {}
+                pollUntil(
+                    function () {
+                        var m = modeOf(tlFor(dev));
+                        return (m === "user" || m === "enable");
+                    },
+                    { interval_ms: POLL_MS_INNER, deadline_ms: ROUTER_BOOT_PHASE_MS },
+                    function () { done({ uuid: String(uuid), name: name }, null); },
+                    function () {
+                        var tlF = tlFor(dev);
+                        done(null, err("PT_TIMEOUT",
+                            typeStr.toLowerCase() + " did not reach user mode within boot deadline",
+                            { last_mode: modeOf(tlF), last_prompt: promptOf(tlF) }));
+                    }
+                );
+            }
+        );
+        return DEFER;
+    }
+
+    // Routers boot into the System Configuration Dialog (M5). PT IOS takes
+    // 1-3 s to even reach the dialog prompt, so a fixed setTimeout doesn't
+    // work — we have to poll for the dialog to actually appear before
+    // sending "no", then poll for the resulting transition into user mode.
     // Phase 1: dialog prompt is up, OR we're somehow already past it.
     pollUntil(
         function () {
@@ -292,7 +345,7 @@ function op_add_device(args, done) {
                     var out = (t.getOutput ? t.getOutput() : "");
                     return /Press RETURN to get started/.test(out);
                 },
-                { interval_ms: POLL_MS_INNER, deadline_ms: IOS_MODE_DEADLINE_MS },
+                { interval_ms: POLL_MS_INNER, deadline_ms: ROUTER_BOOT_PHASE_MS },
                 function () {
                     var t = tlFor(dev);
                     var m = modeOf(t);
@@ -305,7 +358,7 @@ function op_add_device(args, done) {
                             var mm = modeOf(tlFor(dev));
                             return (mm === "user" || mm === "enable");
                         },
-                        { interval_ms: POLL_MS_INNER, deadline_ms: IOS_MODE_DEADLINE_MS },
+                        { interval_ms: POLL_MS_INNER, deadline_ms: ROUTER_BOOT_PHASE_MS },
                         function () { done({ uuid: String(uuid), name: name }, null); },
                         function () {
                             var t4 = tlFor(dev);
@@ -326,10 +379,39 @@ function op_add_device(args, done) {
             );
         },
         function () {
-            var tl3 = tlFor(dev);
-            done(null, err("PT_TIMEOUT",
-                "router boot dialog never appeared (boot took >" + BOOT_DIALOG_DEADLINE_MS + "ms)",
-                { last_mode: modeOf(tl3), last_prompt: promptOf(tl3) }));
+            // Phase 1 timeout — dialog never seen within BOOT_DIALOG_DEADLINE_MS.
+            // Defensive recovery (phase 4.5 medium-test feedback #1): the
+            // dialog might have rendered just after the last poll, or PT was
+            // saturated by parallel router adds. Send "no" + RETURN
+            // unconditionally and give it ROUTER_BOOT_PHASE_MS to land in
+            // user/enable. Worst case is one or two harmless extra Enters
+            // sent to a router that's not at the dialog.
+            try {
+                var tlR = tlFor(dev);
+                if (tlR && typeof tlR.enterCommand === "function") tlR.enterCommand("no");
+            } catch (e) {}
+            setTimeout(function () {
+                try {
+                    var tlR2 = tlFor(dev);
+                    if (tlR2 && typeof tlR2.enterCommand === "function") tlR2.enterCommand("");
+                } catch (e) {}
+                pollUntil(
+                    function () {
+                        var mm = modeOf(tlFor(dev));
+                        return (mm === "user" || mm === "enable");
+                    },
+                    { interval_ms: POLL_MS_INNER, deadline_ms: ROUTER_BOOT_PHASE_MS },
+                    function () { done({ uuid: String(uuid), name: name }, null); },
+                    function () {
+                        var tlF = tlFor(dev);
+                        done(null, err("PT_TIMEOUT",
+                            "router did not reach user mode (boot took >" +
+                            BOOT_DIALOG_DEADLINE_MS + "ms initial + defensive recovery)",
+                            { last_mode: modeOf(tlF), last_prompt: promptOf(tlF),
+                              output_tail: (tlF && tlF.getOutput) ? tlF.getOutput().slice(-200) : "" }));
+                    }
+                );
+            }, 1500);
         }
     );
     return DEFER;
@@ -543,6 +625,154 @@ function op_run_command(args) {
     };
 }
 
+function op_run_commands(args, done) {
+    // Pipelined sibling of op_run_command. Sends a list of CLI lines through
+    // a single mailbox round-trip with the same pollUntil pacing pattern
+    // op_configure_interface uses (M5 race rule). Per-line results capture
+    // each command's output slice + IOS state. On a "% ..." IOS error,
+    // stops the sequence and returns what was completed — the caller is
+    // responsible for the recovery decision (IOS modes are fragile;
+    // continuing past a failure usually lands the next command in the
+    // wrong context). Phase 4.5 medium-test feedback #4.
+    var name     = requireArg(args, "device",   "string");
+    var terminal = requireArg(args, "terminal", "string");
+    if (!args || !(args.commands instanceof Array)) {
+        throw err("BAD_ARGS", "commands must be an array of strings");
+    }
+    var commands = args.commands;
+    for (var k = 0; k < commands.length; k++) {
+        if (typeof commands[k] !== "string") {
+            throw err("BAD_ARGS", "commands[" + k + "] must be a string, got " + typeof commands[k]);
+        }
+        if (commands[k].indexOf("\n") >= 0) {
+            throw err("BAD_ARGS", "commands[" + k + "] contains embedded newline");
+        }
+    }
+    if (terminal !== "ios" && terminal !== "desktop") {
+        throw err("BAD_ARGS",
+            "terminal must be \"ios\" or \"desktop\", got " + JSON.stringify(terminal),
+            { allowed: ["ios", "desktop"] });
+    }
+
+    var dev = requireDevice(name);
+    var tl = null;
+    if (terminal === "desktop") {
+        if (typeof dev.getCommandPrompt !== "function") {
+            throw err("PT_NOT_FOUND",
+                "device has no desktop Command Prompt: " + name +
+                " (terminal:\"desktop\" requires a host like PC/Laptop)");
+        }
+        tl = dev.getCommandPrompt();
+    } else {
+        if (typeof dev.getCommandLine !== "function") {
+            throw err("PT_NOT_FOUND",
+                "device has no IOS console line: " + name +
+                " (terminal:\"ios\" requires routers/switches/IOS gear)");
+        }
+        tl = dev.getCommandLine();
+    }
+    if (!tl) {
+        throw err("PT_NOT_FOUND",
+            "terminal accessor returned null on device: " + name +
+            " (terminal=" + terminal + ")");
+    }
+
+    var results = [];
+    var i = 0;
+
+    function curPrompt() { try { return (typeof tl.getPrompt === "function") ? tl.getPrompt() : ""; } catch (e) { return ""; } }
+    function curMode()   { try { return (typeof tl.getMode   === "function") ? tl.getMode()   : ""; } catch (e) { return ""; } }
+    function curOutput() { try { return (typeof tl.getOutput === "function") ? tl.getOutput() : ""; } catch (e) { return ""; } }
+
+    function finish(stoppedEarly) {
+        done({
+            results:        results,
+            stopped_early:  !!stoppedEarly,
+            final_prompt:   curPrompt(),
+            final_mode:     curMode()
+        }, null);
+    }
+
+    // Detect IOS error markers in a command's output slice. IOS prints
+    // "% Invalid input detected at '^' marker.", "% Incomplete command.",
+    // "% Ambiguous command:", "% Unknown ...", etc. — all start with "% ".
+    function detectIosError(thisOut) {
+        var lines = thisOut.split("\n");
+        for (var j = 0; j < lines.length; j++) {
+            var ln = lines[j];
+            // Trim leading whitespace only — preserve the message body.
+            var t = ln.replace(/^\s+/, "");
+            if (t.length >= 2 && t.charAt(0) === "%" && t.charAt(1) === " ") {
+                return t;
+            }
+        }
+        return null;
+    }
+
+    function nextCommand() {
+        if (i >= commands.length) { finish(false); return; }
+
+        var cmd = commands[i];
+        var preOut    = curOutput();
+        var prePrompt = curPrompt();
+
+        try {
+            tl.enterCommand(cmd);
+        } catch (e) {
+            results.push({
+                command:       cmd,
+                output:        "",
+                prompt:        prePrompt,
+                mode:          curMode(),
+                error_type:    "INTERNAL",
+                error_message: "enterCommand threw: " + e
+            });
+            finish(true);
+            return;
+        }
+
+        // Pacing predicate: prompt changed OR buffer grew. Either is a
+        // signal that the command landed. On deadline expiry we proceed
+        // anyway (a no-op like "interface ..." in already-config-mode
+        // legitimately produces neither signal — that's not an error).
+        pollUntil(
+            function () {
+                if (curPrompt() !== prePrompt) return true;
+                if (curOutput().length > preOut.length) return true;
+                return false;
+            },
+            { interval_ms: POLL_MS_INNER, deadline_ms: IOS_MODE_DEADLINE_MS },
+            function () { afterCommand(cmd, preOut, prePrompt); },
+            function () { afterCommand(cmd, preOut, prePrompt); }
+        );
+    }
+
+    function afterCommand(cmd, preOut, prePrompt) {
+        var nowOut = curOutput();
+        var thisOut = (nowOut.length > preOut.length) ? nowOut.slice(preOut.length) : "";
+        var entry = {
+            command: cmd,
+            output:  thisOut,
+            prompt:  curPrompt(),
+            mode:    curMode()
+        };
+        var iosErr = detectIosError(thisOut);
+        if (iosErr) {
+            entry.error_type    = "PT_REJECTED";
+            entry.error_message = iosErr;
+            results.push(entry);
+            finish(true);
+            return;
+        }
+        results.push(entry);
+        i++;
+        nextCommand();
+    }
+
+    nextCommand();
+    return DEFER;
+}
+
 function op_list_devices() {
     var devs = listRawDevices();
     var out = [];
@@ -628,6 +858,7 @@ var DISPATCH = {
     configure_interface: op_configure_interface,
     configure_host:      op_configure_host,
     run_command:         op_run_command,
+    run_commands:        op_run_commands,
     list_devices:        op_list_devices,
     get_port_state:      op_get_port_state,
     save:                op_save

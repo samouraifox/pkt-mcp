@@ -2,9 +2,9 @@
 
 MCP server that builds Cisco Packet Tracer networks from PDF requirements.
 
-**Status:** Phases 1–3 done. Phase 4 (FastMCP wrapper) in progress —
-the MCP server scaffolding lives in `pkt_mcp/` and is registered with
-Claude Code per the section below.
+**Status:** Phases 1–4 done; Phase 4.5 patches landed. The MCP server
+lives in `pkt_mcp/` and is registered with Claude Code per the section
+below. The phase recap is in `docs/phase4-mcp.md`.
 
 ## Architecture
 
@@ -73,6 +73,40 @@ string `"ok"`.
 `~/.claude.json` is per-user state and lives outside the repo; the
 snippet above is the source of truth that other operators (or you in
 six months) need to paste in.
+
+## Refreshing the PT bundle (when `main.js` or `api.js` changes)
+
+The `.pts` blob loaded inside PT is a **build artifact** — PT encrypts
+the JavaScript at Export time and runs that encrypted copy. Editing the
+`.js` source on disk does NOT take effect until you re-bundle the
+module in PT's GUI:
+
+1. **Extensions → Scripting → Configure PT Script Module → `pkt-mcp Bridge`**
+2. Click **Stop** if the listener is running.
+3. **Edit** → for each changed file (`main.js`, `api.js`), replace the
+   editor contents with the latest source from `pt-script-module/`.
+4. Click **Save** so PT re-Exports the encrypted `.pts`.
+5. Click **Start**.
+6. Verify the listener is alive — from the repo root:
+
+   ```
+   uv run python -c 'from tools.pkt_bridge import Bridge; print(Bridge(timeout=5).list_devices())'
+   ```
+
+   A response (even `[]`) means the bundle is loaded and the dispatcher
+   is the version on disk. A `TimeoutError` means the listener is not
+   running — restart Step 2.
+
+This is the **only** manual GUI step in the project; flag it loudly when
+something looks wrong. Two symptoms that always mean "your bundle is
+stale, reload it":
+
+- A typed op returns the literal string `"... not implemented yet — Step
+  N probe pending"`. That's a Phase 3-era stub from before
+  `a689a99` / the op handler in question; the on-disk source has the
+  real implementation.
+- An op fails with `UNKNOWN_OP` for an op that exists in the on-disk
+  `api.js` `DISPATCH` table.
 
 ## Repo layout
 

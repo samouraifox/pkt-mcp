@@ -28,6 +28,7 @@ from __future__ import annotations
 import json
 import os
 import sys
+import threading
 import time
 import uuid
 from typing import Any
@@ -99,6 +100,12 @@ _TERMINAL_BY_TYPE: dict[str, str] = {
     "SERVER": "desktop",
 }
 
+# IOS commands whose intent is to drop privilege. If the caller issues one
+# of these, run_command must NOT auto-re-enable — that would defeat what
+# the caller asked for. Other commands landing in user mode unexpectedly
+# are treated as a console auto-logout.
+_USER_MODE_INTENT = frozenset({"disable", "exit", "logout", "quit"})
+
 
 # ── client ────────────────────────────────────────────────────────────────
 
@@ -118,6 +125,19 @@ class Bridge:
         self._result_path = os.path.join(mailbox, "result.json")
         self._timeout = timeout
         self._device_types: dict[str, str] = {}
+        # Last observed IOS mode per device, updated by run_command. Used
+        # to detect console auto-logout demotion (enable→user with no
+        # caller intent to disable) so the next run_command can re-enable
+        # transparently. Phase 4.5 medium-test feedback #3.
+        self._last_modes: dict[str, str] = {}
+        # Serializes concurrent send() calls. The mailbox is single-slot —
+        # if FastMCP runs two tool calls in parallel threads (sync tools
+        # are dispatched via anyio.to_thread.run_sync), they'd race on
+        # cmd.json: one os.replace clobbers the other before the SE
+        # listener picks it up. Phase 4.5 medium-test feedback motivated
+        # this — devices landing on canvas but the second add_device
+        # raising PT_TIMEOUT is a classic symptom of a swallowed command.
+        self._send_lock = threading.Lock()
 
     # ── transport ────────────────────────────────────────────────────────
 
@@ -125,28 +145,34 @@ class Bridge:
              timeout: float | None = None) -> dict:
         """Roundtrip a single op. Returns the full envelope:
         {id, result, error, logs}. Does NOT raise on error_type — use call()
-        for that. Useful in the CLI / debug paths where logs matter."""
-        os.makedirs(self._mailbox, exist_ok=True)
-        cmd_id = str(uuid.uuid4())
-        body = json.dumps({"id": cmd_id, "op": op, "args": args or {}})
-        with open(self._cmd_tmp, "w") as f:
-            f.write(body)
-        os.replace(self._cmd_tmp, self._cmd_path)
+        for that. Useful in the CLI / debug paths where logs matter.
 
-        deadline = time.time() + (timeout if timeout is not None else self._timeout)
-        while time.time() < deadline:
-            if os.path.exists(self._result_path):
-                with open(self._result_path) as f:
-                    raw = f.read()
-                os.remove(self._result_path)
-                resp = json.loads(raw)
-                if resp.get("id") == cmd_id:
-                    return resp
-                # Stale result from a previous run — keep polling.
-            time.sleep(POLL_S)
-        raise TimeoutError(
-            f"no matching result within {timeout or self._timeout}s for op={op}"
-        )
+        Holds _send_lock for the full write→poll→read cycle so concurrent
+        callers (e.g. FastMCP running multiple sync tools in parallel)
+        can't overwrite each other's cmd.json. Round-trips become serial
+        per-Bridge-instance — necessary trade-off for correctness."""
+        with self._send_lock:
+            os.makedirs(self._mailbox, exist_ok=True)
+            cmd_id = str(uuid.uuid4())
+            body = json.dumps({"id": cmd_id, "op": op, "args": args or {}})
+            with open(self._cmd_tmp, "w") as f:
+                f.write(body)
+            os.replace(self._cmd_tmp, self._cmd_path)
+
+            deadline = time.time() + (timeout if timeout is not None else self._timeout)
+            while time.time() < deadline:
+                if os.path.exists(self._result_path):
+                    with open(self._result_path) as f:
+                        raw = f.read()
+                    os.remove(self._result_path)
+                    resp = json.loads(raw)
+                    if resp.get("id") == cmd_id:
+                        return resp
+                    # Stale result from a previous run — keep polling.
+                time.sleep(POLL_S)
+            raise TimeoutError(
+                f"no matching result within {timeout or self._timeout}s for op={op}"
+            )
 
     def call(self, op: str, args: dict | None = None, *,
              timeout: float | None = None) -> Any:
@@ -207,7 +233,15 @@ class Bridge:
                     terminal: str | None = None) -> dict:
         """Returns {output, prompt, mode}. Auto-dispatches terminal kind
         from the cached device type populated by add_device / list_devices.
-        Override with terminal="ios" or "desktop"."""
+        Override with terminal="ios" or "desktop".
+
+        On IOS terminals, transparently recovers from PT's console
+        auto-logout: if the device was last seen in a privileged mode and
+        the new call lands in user mode without an explicit demotion
+        command, re-enable and retry once. The recovered result carries
+        an `auto_re_enabled: True` field. Caveat: this assumes no
+        `enable secret` is set — if it is, the auto-enable will block at
+        the password prompt and the retry will fail. Phase 4.5 feedback #3."""
         if terminal is None:
             dtype = self._device_types.get(device)
             if dtype is None:
@@ -223,9 +257,91 @@ class Bridge:
                     "has no terminal; pass terminal explicitly if you have one"
                 )
             terminal = mapped
-        return self.call("run_command", {
+
+        last_mode = self._last_modes.get(device, "")
+        result = self.call("run_command", {
             "device": device, "command": command, "terminal": terminal,
         })
+        new_mode = (result or {}).get("mode") or ""
+
+        # Detect demotion: privileged-then-user with no caller intent.
+        cmd_norm = (command or "").strip().lower()
+        if (terminal == "ios"
+                and new_mode == "user"
+                and last_mode and last_mode != "user"
+                and cmd_norm not in _USER_MODE_INTENT):
+            self.call("run_command", {
+                "device": device, "command": "enable", "terminal": terminal,
+            })
+            result = self.call("run_command", {
+                "device": device, "command": command, "terminal": terminal,
+            })
+            if isinstance(result, dict):
+                result["auto_re_enabled"] = True
+                new_mode = result.get("mode") or new_mode
+
+        self._last_modes[device] = new_mode
+        return result
+
+    def run_commands(self, device: str, commands: list[str], *,
+                     terminal: str | None = None) -> dict:
+        """Pipelined sibling of run_command — sends a list of CLI lines in
+        a single mailbox round-trip with prompt/output-growth pacing
+        between each. Returns:
+
+            {
+              "results": [
+                {"command", "output", "prompt", "mode",
+                 "error_type"?, "error_message"?},  # one entry per attempted line
+                ...
+              ],
+              "stopped_early": bool,    # True iff we stopped before sending all
+              "final_prompt": str,
+              "final_mode":   str
+            }
+
+        Stops at the first per-line error (IOS "% ..." marker captured in
+        the output slice). The failing line carries `error_type` /
+        `error_message`; subsequent commands are NOT attempted (IOS modes
+        are fragile — continuing past a failure usually lands the next
+        command in the wrong context). Index alignment: results[i]
+        corresponds to commands[i] for every attempted command.
+
+        Does NOT auto-re-enable on console auto-logout demotion (that's
+        run_command's job). If a long pause might cause auto-logout,
+        include "enable" as the first line in the sequence.
+
+        Phase 4.5 medium-test feedback #4."""
+        if terminal is None:
+            dtype = self._device_types.get(device)
+            if dtype is None:
+                raise BadArgs(
+                    f"run_commands: no cached type for device {device!r}; "
+                    "call add_device or list_devices first, or pass "
+                    "terminal=\"ios\"|\"desktop\" explicitly"
+                )
+            mapped = _TERMINAL_BY_TYPE.get(dtype)
+            if mapped is None:
+                raise BadArgs(
+                    f"run_commands: device {device!r} has type {dtype!r} which "
+                    "has no terminal; pass terminal explicitly if you have one"
+                )
+            terminal = mapped
+
+        if not isinstance(commands, list):
+            raise BadArgs(
+                f"run_commands: commands must be a list, got {type(commands).__name__}"
+            )
+
+        result = self.call("run_commands", {
+            "device": device, "commands": commands, "terminal": terminal,
+        })
+
+        if isinstance(result, dict):
+            new_mode = result.get("final_mode") or ""
+            if new_mode:
+                self._last_modes[device] = new_mode
+        return result
 
     def list_devices(self) -> list[dict]:
         """Refreshes the local name→type cache from PT's view of the

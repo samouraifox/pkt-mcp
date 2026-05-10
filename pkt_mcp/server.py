@@ -397,6 +397,68 @@ def run_command(
 
 
 @mcp.tool()
+def run_commands(
+    device: str,
+    commands: list[str],
+    terminal: str | None = None,
+) -> dict:
+    """Execute a list of CLI lines on a device's terminal in a single
+    pipelined mailbox round-trip. Use this instead of N sequential
+    run_command calls when you have a multi-line config to apply (VLAN +
+    switchport stack, OSPF setup, subinterface block) — saves ~N×500ms
+    of mailbox latency.
+
+    Args:
+        device: Device name.
+        commands: List of CLI lines, no embedded newlines. Run in order
+                  with prompt-or-output-growth pacing between each.
+                  Empty list returns immediately with no work done.
+        terminal: Optional, "ios" or "desktop". Auto-dispatched from the
+                  device's cached type — usually omit.
+
+    Returns:
+        {
+          "results": [
+            {"command", "output", "prompt", "mode",
+             "error_type"?, "error_message"?},
+            ...
+          ],
+          "stopped_early": <bool>,    # True iff aborted before sending all
+          "final_prompt":  <str>,
+          "final_mode":    <str>
+        }
+    The i-th entry of `results` is the i-th command of `commands`.
+    `output` is the slice of the terminal buffer this command produced
+    (NOT the full scrollback — that would grow unboundedly across
+    pipelined calls).
+
+    Per-line error policy: detects IOS error markers ("% Invalid input
+    detected ...", "% Incomplete command.", "% Ambiguous command:",
+    etc.) in each command's output slice. On the first hit, the failing
+    entry carries `error_type="PT_REJECTED"` + the error line as
+    `error_message`, and subsequent commands are NOT attempted. IOS
+    modes are fragile — continuing past a failure usually lands the
+    next command in the wrong context, so the caller has to decide on
+    recovery.
+
+    Notes:
+    - Does NOT auto-re-enable on console auto-logout demotion (that's
+      run_command's job). If a long pause might cause auto-logout,
+      include "enable" as the first line in your sequence.
+    - For IOS sequences with state-change verification (configure
+      interface IP), prefer configure_interface — it polls port_state
+      until the interface reads up/up. run_commands fires-and-paces but
+      doesn't verify outcomes beyond IOS error detection.
+    - Pacing reuses the same pollUntil pattern op_configure_interface
+      uses; no new logic. The signal is "prompt changed OR output
+      buffer grew"; deadline expiry just proceeds (a no-op like
+      `interface ...` in already-config-mode produces neither signal
+      and that's fine).
+    """
+    return _call(_bridge.run_commands, device, commands, terminal=terminal)
+
+
+@mcp.tool()
 def list_devices() -> list[dict]:
     """Enumerate every user-visible device on the canvas.
 
