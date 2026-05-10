@@ -104,6 +104,7 @@ _TERMINAL_BY_TYPE: dict[str, str | None] = {
     "SWITCH": "ios",
     "MULTILAYER_SWITCH": "ios",
     "WIRELESS_ROUTER": "ios",
+    "ASA": "ios",
     "PC": "desktop",
     "SERVER": "desktop",
     "IP_PHONE": None,

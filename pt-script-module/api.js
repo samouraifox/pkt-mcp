@@ -36,7 +36,8 @@ var DEVICE_TYPES = {
     SERVER: 9,
     WIRELESS_ROUTER: 11,
     IP_PHONE: 12,
-    MULTILAYER_SWITCH: 16
+    MULTILAYER_SWITCH: 16,
+    ASA: 27
 };
 
 var DEVICE_TYPE_BY_INT = {};
@@ -91,6 +92,10 @@ var ROUTER_BOOT_PHASE_MS    = 30000;   // post-dialog "Press RETURN" + user-mode
 var IOS_MODE_DEADLINE_MS    = 8000;    // intra-config IOS mode transitions
                                        // (configure_interface) — these are fast
                                        // even under load; keep snappy
+var ASA_BOOT_DEADLINE_MS    = 180000;  // ASA 5506-X boots ROMMON → POST → user
+                                       // mode at "ciscoasa>"; observed ~90-150s
+                                       // in phase 4.6 step 3 probe. No dialog
+                                       // skip needed (boots straight to user).
 var SAVE_DEADLINE_MS = 10000;          // fileSaveAsNoPrompt writes async
 
 // ─── error helper ────────────────────────────────────────────────────────
@@ -144,6 +149,29 @@ function findPort(device, portName) {
             if (pp && pp.getName() === portName) return pp;
         }
     }
+    return null;
+}
+
+// Returns the IOS-style TerminalLine for any device kind that has one
+// (router/switch/MLS/wireless-router/ASA). Prefers getConsoleLine() because
+// ASA's getCommandLine() returns null in PT 9.0.0 — getConsoleLine() returns
+// the live "ciscoasa>" terminal. Routers/switches/MLS expose both accessors
+// returning equivalent live wrappers (verified phase 4.6 step 3 probe), so
+// preferring getConsoleLine is uniformly safe. PCs/Servers use a separate
+// getCommandPrompt() accessor; that path goes through op_run_command's
+// terminal="desktop" branch, NOT through tlFor.
+function tlFor(device) {
+    try {
+        if (typeof device.getConsoleLine === "function") {
+            var tl = device.getConsoleLine();
+            if (tl) return tl;
+        }
+    } catch (e) { /* fall through */ }
+    try {
+        if (typeof device.getCommandLine === "function") {
+            return device.getCommandLine();
+        }
+    } catch (e) { /* fall through */ }
     return null;
 }
 
@@ -259,20 +287,45 @@ function op_add_device(args, done) {
     }
     dev.setName(name);
 
-    // Non-IOS devices (PC/Server/Hub) are ready as soon as addDevice returns.
+    // Non-IOS devices (PC/Server/Hub/IP_PHONE) are ready as soon as
+    // addDevice returns.
     if (typeStr !== "ROUTER" && typeStr !== "SWITCH" &&
-        typeStr !== "WIRELESS_ROUTER" && typeStr !== "MULTILAYER_SWITCH") {
+        typeStr !== "WIRELESS_ROUTER" && typeStr !== "MULTILAYER_SWITCH" &&
+        typeStr !== "ASA") {
         return { uuid: String(uuid), name: name };
     }
 
-    // Shared CLI introspection helpers (used by both the SWITCH boot-wait
-    // and the ROUTER dialog-skip + boot-wait below).
-    function tlFor(dev) {
-        try { return (typeof dev.getCommandLine === "function") ? dev.getCommandLine() : null; }
-        catch (e) { return null; }
-    }
+    // Shared CLI introspection helpers (used by SWITCH boot-wait, ROUTER
+    // dialog-skip, ASA boot-wait below). tlFor() lives at module scope —
+    // it dispatches to getConsoleLine() vs getCommandLine() per device kind.
     function modeOf(tl) { try { return (tl && tl.getMode) ? tl.getMode() : ""; } catch (e) { return ""; } }
     function promptOf(tl) { try { return (tl && tl.getPrompt) ? tl.getPrompt() : ""; } catch (e) { return ""; } }
+
+    // ASA: boots ROMMON → POST → user mode at "ciscoasa>". No System
+    // Configuration Dialog. CLI surface comes up only via getConsoleLine
+    // (getCommandLine returns null on ASA — see phase 4.6 step 3 probe).
+    // tlFor handles that asymmetry. Boot is slow — observed 90-150s in the
+    // probe; ASA_BOOT_DEADLINE_MS is set to 180s as a conservative cap.
+    if (typeStr === "ASA") {
+        pollUntil(
+            function () {
+                var t = tlFor(dev);
+                if (!t) return false;
+                var m = modeOf(t);
+                return (m === "user" || m === "enable");
+            },
+            { interval_ms: POLL_MS_INNER, deadline_ms: ASA_BOOT_DEADLINE_MS },
+            function () { done({ uuid: String(uuid), name: name }, null); },
+            function () {
+                var tlF = tlFor(dev);
+                done(null, err("PT_TIMEOUT",
+                    "ASA did not reach user mode within " + ASA_BOOT_DEADLINE_MS + "ms boot deadline",
+                    { last_mode: modeOf(tlF), last_prompt: promptOf(tlF),
+                      output_tail: (tlF && tlF.getOutput) ? tlF.getOutput().slice(-200) : "" }));
+            }
+        );
+        return DEFER;
+    }
 
     // SWITCH and WIRELESS_ROUTER: no boot dialog, but the CLI takes a few
     // seconds to reach user/enable mode after addDevice. Phase 4.5 medium-
@@ -486,7 +539,7 @@ function op_configure_interface(args, done) {
 
     var dev  = requireDevice(name);
     var port = requirePort(dev, iface);
-    var tl   = (typeof dev.getCommandLine === "function") ? dev.getCommandLine() : null;
+    var tl   = tlFor(dev);
     if (!tl) throw err("PT_NOT_FOUND", "no command line on device: " + name);
 
     // Each step's predicate is what must become true before we send the
@@ -618,12 +671,8 @@ function op_run_command(args) {
         }
         tl = dev.getCommandPrompt();
     } else {
-        if (typeof dev.getCommandLine !== "function") {
-            throw err("PT_NOT_FOUND",
-                "device has no IOS console line: " + name +
-                " (terminal:\"ios\" requires routers/switches/IOS gear)");
-        }
-        tl = dev.getCommandLine();
+        // tlFor handles getConsoleLine vs getCommandLine asymmetry (ASA).
+        tl = tlFor(dev);
     }
     if (!tl) {
         throw err("PT_NOT_FOUND",
@@ -678,12 +727,8 @@ function op_run_commands(args, done) {
         }
         tl = dev.getCommandPrompt();
     } else {
-        if (typeof dev.getCommandLine !== "function") {
-            throw err("PT_NOT_FOUND",
-                "device has no IOS console line: " + name +
-                " (terminal:\"ios\" requires routers/switches/IOS gear)");
-        }
-        tl = dev.getCommandLine();
+        // tlFor handles getConsoleLine vs getCommandLine asymmetry (ASA).
+        tl = tlFor(dev);
     }
     if (!tl) {
         throw err("PT_NOT_FOUND",

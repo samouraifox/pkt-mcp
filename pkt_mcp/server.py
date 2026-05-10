@@ -152,16 +152,17 @@ def add_device(type: str, name: str, model: str, x: float, y: float) -> dict:
     """Place a new device on the PT canvas.
 
     Args:
-        type: One of "ROUTER", "SWITCH", "MULTILAYER_SWITCH", "PC",
-              "SERVER", "HUB", "WIRELESS_ROUTER", "IP_PHONE". Other types
-              exist in PT but are not yet wired through the Bridge.
+        type: One of "ROUTER", "SWITCH", "MULTILAYER_SWITCH", "ASA",
+              "PC", "SERVER", "HUB", "WIRELESS_ROUTER", "IP_PHONE". Other
+              types exist in PT but are not yet wired through the Bridge.
         name: Unique device name (e.g. "R1", "SW1", "PC1"). Fails with
               PT_REJECTED if a device with the same name already exists —
               call delete_device first if you need to replace it.
         model: PT model string. Must match a real PT model exactly. Known
                working values: "2911" (ROUTER), "2960-24TT" (SWITCH),
                "3560-24PS" (MULTILAYER_SWITCH; also "3560-24PH", "3560H",
-               "3650-24PS"), "PC-PT" (PC), "Server-PT" (SERVER), "Hub-PT"
+               "3650-24PS"), "5506-X" (ASA; also "5505" for the 5505
+               model), "PC-PT" (PC), "Server-PT" (SERVER), "Hub-PT"
                (HUB), "Linksys-WRT300N" (WIRELESS_ROUTER), "7960"
                (IP_PHONE). A bad model is rejected silently by PT and
                returns PT_REJECTED here.
@@ -176,6 +177,18 @@ def add_device(type: str, name: str, model: str, x: float, y: float) -> dict:
       transparently skips that dialog and waits until the device lands in
       user mode before returning. MULTILAYER_SWITCH supports `ip routing`
       and SVIs (`interface vlan N`) — use it for L3 switches.
+    - ASA boots from ROMMON → POST → user mode at "ciscoasa>" with NO
+      Configuration Dialog. Boot is slow — observed 90-150s; this tool
+      waits up to 180s. The 5506-X has 9 ports (GigabitEthernet1/1..1/8 +
+      Management1/1). ASA OS is a different syntax from IOS:
+      `configure_interface` only emits `enable / configure terminal /
+      interface ... / ip address ... / no shutdown / end`, which is NOT
+      enough on a fresh ASA — interfaces also need `nameif <name>` and
+      `security-level <0-100>` before they pass traffic, and
+      `access-list` / `access-group` for ACL policy. Compose those via
+      `run_commands` (one-shot pipelined sequence). configure_interface
+      will succeed at the IP/up/up level but the interface stays
+      ineffective until nameif/security-level land.
     - IP_PHONE places a phone with three ports (Vlan1 / Switch / PC). The
       `Switch` port is the upstream link; cable it to a switch access
       port with `connect`. Phones register with CME, which was REMOVED
