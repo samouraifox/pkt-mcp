@@ -95,6 +95,7 @@ _ERROR_CLASSES: dict[str, type[BridgeError]] = {
 _TERMINAL_BY_TYPE: dict[str, str] = {
     "ROUTER": "ios",
     "SWITCH": "ios",
+    "MULTILAYER_SWITCH": "ios",
     "WIRELESS_ROUTER": "ios",
     "PC": "desktop",
     "SERVER": "desktop",

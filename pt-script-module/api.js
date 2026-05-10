@@ -34,7 +34,8 @@ var DEVICE_TYPES = {
     HUB: 4,
     PC: 8,
     SERVER: 9,
-    WIRELESS_ROUTER: 11
+    WIRELESS_ROUTER: 11,
+    MULTILAYER_SWITCH: 16
 };
 
 var DEVICE_TYPE_BY_INT = {};
@@ -258,7 +259,8 @@ function op_add_device(args, done) {
     dev.setName(name);
 
     // Non-IOS devices (PC/Server/Hub) are ready as soon as addDevice returns.
-    if (typeStr !== "ROUTER" && typeStr !== "SWITCH" && typeStr !== "WIRELESS_ROUTER") {
+    if (typeStr !== "ROUTER" && typeStr !== "SWITCH" &&
+        typeStr !== "WIRELESS_ROUTER" && typeStr !== "MULTILAYER_SWITCH") {
         return { uuid: String(uuid), name: name };
     }
 
@@ -277,7 +279,11 @@ function op_add_device(args, done) {
     // switch and the IOS commands silently failed because the prompt was
     // still at boot output. add_device's contract is "returned device is
     // CLI-ready" — wait for it.
-    if (typeStr !== "ROUTER") {
+    //
+    // MULTILAYER_SWITCH (3560/3650) is intentionally NOT in this branch —
+    // it boots into the System Configuration Dialog like a router and
+    // needs the same dialog-skip + RETURN sequence below.
+    if (typeStr !== "ROUTER" && typeStr !== "MULTILAYER_SWITCH") {
         pollUntil(
             function () {
                 var t = tlFor(dev);
@@ -313,10 +319,13 @@ function op_add_device(args, done) {
         return DEFER;
     }
 
-    // Routers boot into the System Configuration Dialog (M5). PT IOS takes
-    // 1-3 s to even reach the dialog prompt, so a fixed setTimeout doesn't
-    // work — we have to poll for the dialog to actually appear before
-    // sending "no", then poll for the resulting transition into user mode.
+    // Routers (and 3560/3650 multilayer switches — same boot path) boot
+    // into the System Configuration Dialog (M5). PT IOS takes 1-3 s to
+    // even reach the dialog prompt, so a fixed setTimeout doesn't work —
+    // we have to poll for the dialog to actually appear before sending
+    // "no", then poll for the resulting transition into user mode.
+    // bootLabel surfaces the right device kind in timeout messages.
+    var bootLabel = (typeStr === "MULTILAYER_SWITCH") ? "multilayer switch" : "router";
     // Phase 1: dialog prompt is up, OR we're somehow already past it.
     pollUntil(
         function () {
@@ -332,7 +341,7 @@ function op_add_device(args, done) {
             if (tl && /yes\/no/i.test(promptOf(tl))) {
                 try { tl.enterCommand("no"); }
                 catch (e) {
-                    done(null, err("INTERNAL", "router dialog skip enterCommand threw: " + e));
+                    done(null, err("INTERNAL", bootLabel + " dialog skip enterCommand threw: " + e));
                     return;
                 }
             }
@@ -367,7 +376,7 @@ function op_add_device(args, done) {
                         function () {
                             var t4 = tlFor(dev);
                             done(null, err("PT_TIMEOUT",
-                                "router did not reach user mode after dialog + RETURN",
+                                bootLabel + " did not reach user mode after dialog + RETURN",
                                 { last_mode: modeOf(t4), last_prompt: promptOf(t4),
                                   output_tail: (t4 && t4.getOutput) ? t4.getOutput().slice(-200) : "" }));
                         }
@@ -376,7 +385,7 @@ function op_add_device(args, done) {
                 function () {
                     var t2 = tlFor(dev);
                     done(null, err("PT_TIMEOUT",
-                        "router did not reach 'Press RETURN' state after sending 'no'",
+                        bootLabel + " did not reach 'Press RETURN' state after sending 'no'",
                         { last_mode: modeOf(t2), last_prompt: promptOf(t2),
                           output_tail: (t2 && t2.getOutput) ? t2.getOutput().slice(-200) : "" }));
                 }
@@ -409,7 +418,7 @@ function op_add_device(args, done) {
                     function () {
                         var tlF = tlFor(dev);
                         done(null, err("PT_TIMEOUT",
-                            "router did not reach user mode (boot took >" +
+                            bootLabel + " did not reach user mode (boot took >" +
                             BOOT_DIALOG_DEADLINE_MS + "ms initial + defensive recovery)",
                             { last_mode: modeOf(tlF), last_prompt: promptOf(tlF),
                               output_tail: (tlF && tlF.getOutput) ? tlF.getOutput().slice(-200) : "" }));

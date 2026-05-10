@@ -37,6 +37,7 @@ Targets called out by the Phase 2 plan are bolded.
 | **11** | **WIRELESS_ROUTER** | `"Linksys-WRT300N"` | M1 iter2             |
 | 13   | DSL_MODEM           | `"DSL-Modem-PT"`    | M1 iter1             |
 | 14   | CABLE_MODEM         | `"Cable-Modem-PT"`  | M1 iter1             |
+| **16** | **MULTI_LAYER_SWITCH** | `"3560-24PS"` *(also `"3560-24PH"`, `"3560H"`; supports `ip routing`, SVIs `interface vlan N`)* | portfolio-network probe (2026-05) |
 | 18   | LAPTOP              | `"Laptop-PT"`       | M1 iter1             |
 | 19   | TABLET_PC           | `"TabletPC-PT"`     | M1 iter1             |
 
@@ -52,7 +53,6 @@ substrings the same way M1 iter2 found `2960-24TT` and `Linksys-WRT300N`.
 | 6   | CO_AXIAL_SPLITTER  | `"CoaxialSplitter-PT"`    |
 | 12  | IP_PHONE           | `"IP-Phone"`              |
 | 15  | REMOTE_NETWORK     | `"Remote-Network"`        |
-| 16  | MULTI_LAYER_SWITCH | `"3560"`                  |
 | 17  | SWITCH3650         | `"3650"`                  |
 | 20  | PDA                | `"PDA-PT"`                |
 
