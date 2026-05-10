@@ -122,6 +122,91 @@ of an unverified L2 wastes an hour debugging the wrong layer.
   than letting PT auto-rename `R1 → R1-1`. Either `delete_device(name)`
   first, or pick a unique name. The error includes `existing_uuid`.
 
+## PT 9.0.0 specifics (from portfolio-network build, May 2026)
+
+Lessons from a full portfolio build that hit the limits of PT 9.0.0 vs
+older releases. Bank these so the next portfolio re-run lands cleanly
+without raw bridge workarounds.
+
+### Device wiring landed in phase 4.6
+- **MULTILAYER_SWITCH (type=16).** Use for L3 switches like the 3560-24PS.
+  Boots into the System Configuration Dialog like a router (~10s),
+  supports `ip routing` and SVIs (`interface vlan N`), and has
+  GigabitEthernet0/1..0/2 + FastEthernet0/1..0/24. The 3560 is the
+  natural pick for inter-VLAN routing in a single-site lab.
+- **IP_PHONE (type=12).** Model `7960`. Three ports: `Vlan1`, `Switch`
+  (upstream — cable to a switch access port), `PC` (downstream daisy-
+  chain). Phones in PT 9 cannot register (CME is gone — see below); they
+  exist for layer-2/voice-VLAN demonstration only. `run_command` on a
+  phone raises BAD_ARGS — they have a dormant `getCommandLine()` but no
+  CLI a network operator would drive.
+- **ASA (type=27).** Models `5506-X` and `5505`. 9 ports on the 5506-X:
+  GigabitEthernet1/1..1/8 + Management1/1. ASA OS 9.6(1) image.
+  - Boot is ROMMON → POST → user mode at `ciscoasa>` — **no** System
+    Configuration Dialog. But boot is *slow* (90-150s cold). add_device
+    waits up to 180s.
+  - CLI lives behind `getConsoleLine()`, not `getCommandLine()` like
+    routers/switches. `tlFor(dev)` in api.js handles the asymmetry.
+  - **`configure_interface` is incomplete on ASA.** It emits the IOS
+    skeleton (`enable / configure terminal / interface … / ip address …
+    / no shutdown / end`) which gets the IP/up/up state right but ASA
+    interfaces also need `nameif <name>` and `security-level <0-100>`
+    before they pass traffic. Compose those via `run_commands`. Same
+    for `access-list` / `access-group` policy.
+  - **ASA `enable` prompts for a password.** The default is empty —
+    after `enable`, the next entry is the password (just an empty line
+    to accept the default). `run_commands` users must include this
+    explicitly: `["enable", "", "show running-config"]`.
+
+### Things PT 9.0.0 doesn't support
+- **CME (Communications Manager Express) is REMOVED.** Confirmed by
+  `strings PacketTracer | grep -i 'telephony\|ephone\|cme'` returning
+  zero hits. Voice features (`telephony-service`, `ephone`, `voice
+  register global`) are rejected as Invalid Input even after loading
+  the `uck9` license. Phones can be placed and cabled but will never
+  register. **Use PT 8.x for any voice-required portfolio.** In PT 9,
+  the voice spec sections must be skipped or stubbed.
+- **Server-PT HTTP/DNS services are NOT scriptable via PT IPC.** The
+  Server-PT JS object surface has 104 methods, none for `getHttpService`
+  / `getDnsService` / `getDhcpService`. Service config (HTTP enable +
+  files, DNS A-records, DHCP scopes) lives behind the GUI Services tab
+  and can't be reached from `pkt-mcp`. Recipe for portfolios that need
+  HTTP/DNS end-to-end: build the topology + ACL/NAT chain via this MCP,
+  then manually open Server → Services → HTTP/DNS → enable + add records
+  through the GUI for the verification phase.
+- **`crypto key generate rsa modulus 1024`** (or any modulus arg) is
+  rejected by PT 9.0.0's CLI parser. PT 9 wants the legacy interactive
+  form. SSH keygen on routers needs to be done via the GUI's CLI tab,
+  not through scripted `run_commands`.
+
+### Cisco patterns that are real, not hacks
+- **Fa-Fa trunk fallback when Gi uplinks are constrained.** A 24-port
+  2960 has Fa0/1..0/24 access + Gi0/1..0/2 uplinks. When you've consumed
+  both Gi uplinks and need a third trunk, `switchport mode trunk` on a
+  Fa port is a real Cisco pattern — slower (100Mbps vs 1Gbps) but
+  perfectly valid. Don't apologize for it in the topology doc.
+- **Router-side static return route to a routed L3-switch transit
+  subnet.** When a 3560 sources pings from an SVI on a transit /30 to
+  the upstream router, the upstream router needs an explicit static
+  route back to that transit subnet (otherwise return packets get
+  black-holed by the router's connected-only view). The portfolio
+  build's R-HQ ↔ L3-HQ link needed this. Always think about who has the
+  return path.
+- **Substitute-ASA-as-OSPF-relay (when an ASA isn't available).** If
+  you're using a 2911 as a stand-in for ASA (older PT versions or by
+  spec), and the spec says "ASA is static-only" but downstream
+  adjacencies need to learn HQ subnets, the substitute ASA must speak
+  OSPF to relay LSAs. This contradicts a strict reading of the spec
+  but is the only way to satisfy reachability assertions like "show ip
+  ospf neighbor on R-HQ shows R-BR and L3-HQ as FULL". With phase 4.6's
+  real ASA wiring (type=27), this workaround is no longer needed —
+  reach for the real ASA first.
+
+### Hot-reload workflow recap
+api.js edits land via `bridge.reload_api()` — no GUI step. Only main.js
+edits need the manual Stop/Edit/Save/Start cycle in Extensions →
+Scripting → Configure. See "Dev workflow" section above.
+
 ## Naming conventions
 
 - Routers: `R1`, `R2`, `R3` (number from the topology diagram or
