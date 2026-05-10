@@ -113,6 +113,47 @@ function handleCommand(raw) {
         return;
     }
 
+    // Phase 4.6 step 0: hot-reload api.js without re-Exporting the .pts.
+    //
+    // The Function constructor evaluates body in its own scope with global
+    // as the parent. var declarations inside `code` (DEVICE_TYPES,
+    // DISPATCH, helpers, and the op handlers) are local to that scope; the
+    // returned ops close over them. Mutating the global DISPATCH with the
+    // new entries makes the dispatcher pick up the new closures on the
+    // very next op call.
+    //
+    // Pairs with api.js's string-valued DEFER sentinel so the new closures'
+    // returned DEFER === main.js's global DEFER even though the closure
+    // scope's DEFER is a separate variable. (Object-identity DEFER would
+    // diverge on each reload and `ret === DEFER` here would never match
+    // for async ops.)
+    //
+    // Limitations: ONLY for api.js changes. Listener-level edits in
+    // main.js (this file) still require a GUI Stop/Edit/Save/Start.
+    if (op === "reload_api") {
+        var rldCode = (args && args.code) || "";
+        var rldResult = null, rldError = null;
+        try {
+            var newDispatch = new Function(rldCode + "\n;return DISPATCH;")();
+            // Two-phase replace: collect old keys first, then delete, so we
+            // don't mutate DISPATCH during a for-in over it.
+            var oldKeys = [];
+            for (var ok in DISPATCH) {
+                if (DISPATCH.hasOwnProperty(ok)) oldKeys.push(ok);
+            }
+            for (var oi = 0; oi < oldKeys.length; oi++) delete DISPATCH[oldKeys[oi]];
+            for (var nk in newDispatch) {
+                if (newDispatch.hasOwnProperty(nk)) DISPATCH[nk] = newDispatch[nk];
+            }
+            rldResult = { ok: true, ops: Object.keys(DISPATCH) };
+        } catch (e) {
+            rldError = { error_type: "INTERNAL",
+                         message: "reload_api eval threw: " + e };
+        }
+        finishCommand(id, rldResult, rldError, logs);
+        return;
+    }
+
     var handler = DISPATCH[op];
     if (!handler) {
         finishCommand(id, null,

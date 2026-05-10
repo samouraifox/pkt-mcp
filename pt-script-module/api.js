@@ -20,7 +20,11 @@
 // stamps .error_type / .error_data on a real Error so message/stack still
 // surface in dprint.
 
-var DEFER = {};
+// String sentinel (not {}) so hot-reloaded handlers' DEFER, declared in a
+// Function-constructor closure, still === main.js's global DEFER. Object
+// identity would diverge on every reload_api call. See main.js's
+// `op === "reload_api"` branch for the closure trick.
+var DEFER = "__pkt_mcp_DEFER__";
 
 // Device-type enum (per phase2-api-map.md M1 — extend cautiously, only ints
 // with a runtime-confirmed model belong here).

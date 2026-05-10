@@ -134,3 +134,26 @@ of an unverified L2 wastes an hour debugging the wrong layer.
   GigabitEthernet0/1`, never `description uplink`.
 - Subnet picks: `192.168.<area>.0/24` where `<area>` is a per-vlan or
   per-link integer; reserve `.1` for the gateway, `.10+` for hosts.
+
+## Dev workflow — editing the in-PT bundle
+
+The Script Module bundle has two source files: `pt-script-module/main.js`
+(listener/dispatcher/mailbox) and `pt-script-module/api.js` (op handlers
+and helpers). PT runs the encrypted `.pts` it last Exported, so on-disk
+edits don't auto-take. Two paths:
+
+- **Edit `api.js` (handlers, helpers, constants, DISPATCH entries):**
+  call `reload_api()` (or `bridge.reload_api()`). The MCP tool ships the
+  current file contents to a `reload_api` op in main.js, which rebuilds
+  DISPATCH in place via a `new Function(code + "; return DISPATCH;")()`
+  closure trick. New ops are live on the next call. **No GUI step.**
+  Cheap; do it freely between iterations.
+- **Edit `main.js` (listener structure, mailbox protocol, dispatcher
+  glue):** manual GUI reload — Extensions → Scripting → Configure →
+  Stop → Edit → paste both files → Save → Start. Rare; main.js is
+  stable code.
+
+If `reload_api()` returns `INTERNAL: reload_api eval threw: ...` the new
+api.js has a syntax error or a runtime error during top-level
+evaluation. Fix it on disk and retry — DISPATCH is left as it was on
+parse failure (the merge runs only after the eval succeeds).

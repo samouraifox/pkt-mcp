@@ -372,6 +372,30 @@ class Bridge:
         use this. Persists for ad-hoc API probing (e.g. Step 6 introspection)."""
         return self.call("raw", {"code": code})
 
+    # ── dev workflow ─────────────────────────────────────────────────────
+
+    def reload_api(self, path: str | None = None) -> dict:
+        """Hot-reload the in-PT api.js without re-Exporting the .pts bundle
+        through the Scripting GUI. Reads `path` (defaults to this repo's
+        pt-script-module/api.js) and ships its contents to main.js's
+        reload_api special-case handler, which rebuilds DISPATCH in place.
+
+        Returns: {"ok": true, "ops": [<op names>]} listing the live ops
+        after reload. Raises BridgeInternal if the new code fails to
+        evaluate (with the eval error in the message).
+
+        Use after editing api.js. Edits to main.js (the listener /
+        dispatcher) still require a manual GUI Stop / Edit / Save / Start
+        — main.js's own structure can't hot-reload itself."""
+        if path is None:
+            path = os.path.join(
+                os.path.dirname(os.path.abspath(__file__)),
+                "..", "pt-script-module", "api.js",
+            )
+        with open(path) as f:
+            code = f.read()
+        return self.call("reload_api", {"code": code})
+
 
 # ── CLI ──────────────────────────────────────────────────────────────────
 

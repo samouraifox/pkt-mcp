@@ -729,6 +729,33 @@ def summarize_topology() -> str:
     return "\n".join(lines) + "\n"
 
 
+@mcp.tool()
+def reload_api(path: str | None = None) -> dict:
+    """Hot-reload the in-PT api.js handler module without re-Exporting the
+    .pts bundle through PT's Scripting GUI. Use this after editing
+    pt-script-module/api.js so the new handlers take effect on the next op
+    call.
+
+    Args:
+        path: Optional absolute path to the api.js file. Defaults to the
+              copy in this repo (pt-script-module/api.js, resolved relative
+              to the bridge module). Pass an explicit path only for
+              experiments.
+
+    Returns: {"ok": true, "ops": [<op names>]} — the live op list after
+    reload. If your new op name isn't in `ops`, the reload didn't pick it
+    up (probably a syntax error or a missing entry in the DISPATCH map at
+    the bottom of api.js). Raises INTERNAL with the eval error message
+    if the new code fails to parse / evaluate.
+
+    Scope: ONLY for api.js (handler-level changes — adding/editing ops,
+    helpers, constants). Edits to main.js (the listener / dispatcher /
+    mailbox transport) STILL require a manual GUI reload (Extensions →
+    Scripting → Configure → Stop, Edit both files, Save, Start). The
+    listener can't hot-reload its own structure."""
+    return _call(_bridge.reload_api, path=path)
+
+
 def main() -> None:
     mcp.run()
 
