@@ -91,14 +91,22 @@ _ERROR_CLASSES: dict[str, type[BridgeError]] = {
 # table is just the default when the caller didn't ask. HUB intentionally
 # absent — layer-1 dumb device with no console; calling run_command on one
 # raises BadArgs locally before round-tripping.
+#
+# `None` means "device kind is known but has no terminal we drive" —
+# distinct from missing-from-table ("kind not wired"). IP_PHONE has a
+# getCommandLine() accessor that returns a dormant TerminalLine, but no
+# CLI a network operator would actually want to drive (phones register
+# with CME, not a console). Default-dispatching to "ios" would silently
+# no-op and confuse callers, so we raise BAD_ARGS instead.
 
-_TERMINAL_BY_TYPE: dict[str, str] = {
+_TERMINAL_BY_TYPE: dict[str, str | None] = {
     "ROUTER": "ios",
     "SWITCH": "ios",
     "MULTILAYER_SWITCH": "ios",
     "WIRELESS_ROUTER": "ios",
     "PC": "desktop",
     "SERVER": "desktop",
+    "IP_PHONE": None,
 }
 
 # IOS commands whose intent is to drop privilege. If the caller issues one

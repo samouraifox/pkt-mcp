@@ -35,6 +35,7 @@ var DEVICE_TYPES = {
     PC: 8,
     SERVER: 9,
     WIRELESS_ROUTER: 11,
+    IP_PHONE: 12,
     MULTILAYER_SWITCH: 16
 };
 

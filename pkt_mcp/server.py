@@ -153,8 +153,8 @@ def add_device(type: str, name: str, model: str, x: float, y: float) -> dict:
 
     Args:
         type: One of "ROUTER", "SWITCH", "MULTILAYER_SWITCH", "PC",
-              "SERVER", "HUB", "WIRELESS_ROUTER". Other types exist in PT
-              but are not yet wired through the Bridge.
+              "SERVER", "HUB", "WIRELESS_ROUTER", "IP_PHONE". Other types
+              exist in PT but are not yet wired through the Bridge.
         name: Unique device name (e.g. "R1", "SW1", "PC1"). Fails with
               PT_REJECTED if a device with the same name already exists —
               call delete_device first if you need to replace it.
@@ -162,19 +162,27 @@ def add_device(type: str, name: str, model: str, x: float, y: float) -> dict:
                working values: "2911" (ROUTER), "2960-24TT" (SWITCH),
                "3560-24PS" (MULTILAYER_SWITCH; also "3560-24PH", "3560H",
                "3650-24PS"), "PC-PT" (PC), "Server-PT" (SERVER), "Hub-PT"
-               (HUB), "Linksys-WRT300N" (WIRELESS_ROUTER). A bad model is
-               rejected silently by PT and returns PT_REJECTED here.
+               (HUB), "Linksys-WRT300N" (WIRELESS_ROUTER), "7960"
+               (IP_PHONE). A bad model is rejected silently by PT and
+               returns PT_REJECTED here.
         x, y: Canvas coordinates in pixels. Conventional spacing is ~200
               units between devices; pick something readable.
 
     Returns: {"uuid": "<PT uuid>", "name": "<echoed>"}.
 
-    Notes: Routers and 3560/3650 multilayer switches boot into the System
-    Configuration Dialog and take up to ~30s on first add — this tool
-    transparently skips that dialog and waits until the device lands in
-    user mode before returning, so the next call (e.g. configure_interface)
-    can proceed immediately. MULTILAYER_SWITCH supports `ip routing` and
-    SVIs (`interface vlan N`) — use it for L3 switches like the 3560-24PS."""
+    Notes:
+    - Routers and 3560/3650 multilayer switches boot into the System
+      Configuration Dialog and take up to ~30s on first add — this tool
+      transparently skips that dialog and waits until the device lands in
+      user mode before returning. MULTILAYER_SWITCH supports `ip routing`
+      and SVIs (`interface vlan N`) — use it for L3 switches.
+    - IP_PHONE places a phone with three ports (Vlan1 / Switch / PC). The
+      `Switch` port is the upstream link; cable it to a switch access
+      port with `connect`. Phones register with CME, which was REMOVED
+      from PT 9.0.0 — phones can be placed and cabled but will never
+      register, and run_command on a phone raises BAD_ARGS (no useful
+      terminal). Switchport voice VLAN + DHCP option 150 still apply at
+      the switch side."""
     return _call(
         _bridge.add_device, type=type, name=name, model=model, x=x, y=y
     )
