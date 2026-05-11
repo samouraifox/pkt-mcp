@@ -135,6 +135,227 @@ def _patch_xml(xml: str, services_by_device: Mapping[str, Mapping[str, bool]]
     return patched, report
 
 
+# ── DNS records, HTTP files, AP wireless (phase 4.9) ──────────────────────
+#
+# All three follow the same per-device pattern as set_pkt_services: locate
+# the <DEVICE>…</DEVICE> block by name, then patch a sub-element. Schemas
+# captured by diff'ing serializeToXml around GUI clicks in phase 4.9.
+
+
+# DNS uses a list of <RESOURCE-RECORD> entries inside NAMESERVER-DATABASE.
+# Empty form is <NAMESERVER-DATABASE/> (self-closing); populated form has
+# children. We always emit the populated form when records exist, the
+# self-closing form when records is empty.
+_DNS_DB_RE = re.compile(
+    r"<NAMESERVER-DATABASE\s*/>|<NAMESERVER-DATABASE>.*?</NAMESERVER-DATABASE>",
+    re.DOTALL,
+)
+
+
+def _render_dns_db(records: Mapping[str, str]) -> str:
+    if not records:
+        return "<NAMESERVER-DATABASE/>"
+    items = []
+    for name, ip in records.items():
+        items.append(
+            "<RESOURCE-RECORD>"
+            "<TYPE>A-REC</TYPE>"
+            f"<NAME>{name}</NAME>"
+            "<TTL>86400</TTL>"
+            f"<IPADDRESS>{ip}</IPADDRESS>"
+            "</RESOURCE-RECORD>"
+        )
+    return "<NAMESERVER-DATABASE>" + "".join(items) + "</NAMESERVER-DATABASE>"
+
+
+def _patch_dns_records(block: str, records: Mapping[str, str]) -> tuple[str, str]:
+    """Replace NAMESERVER-DATABASE with the given A-record set (full
+    replacement: not additive). Returns (new_block, status)."""
+    if "<DNS_SERVER>" not in block:
+        return block, "block_missing"
+    new_db = _render_dns_db(records)
+    new_block, n = _DNS_DB_RE.subn(new_db, block, count=1)
+    if n == 0:
+        return block, "block_missing"
+    if new_block == block:
+        return block, "no_change"
+    return new_block, "applied"
+
+
+# HTTP files: each file is a <FILE class="CFile"> entry inside <FILES>.
+# To replace content we locate the <FILE> with matching <NAME>, then swap
+# the inner <TEXT>. PT escapes '<' as '&lt;' and '&' as '&amp;', leaves '>'
+# literal — we mirror that.
+
+def _pt_html_escape(s: str) -> str:
+    # Order matters: do '&' first so we don't double-escape.
+    return s.replace("&", "&amp;").replace("<", "&lt;")
+
+
+def _patch_http_files(block: str, files: Mapping[str, str]) -> dict[str, str]:
+    """Modify TEXT of each existing <FILE> by NAME. PT auto-creates a small
+    set of files (index.html, helloworld.html, copyrights.html, image.html);
+    we only modify existing entries. Returns per-file status dict."""
+    status: dict[str, str] = {}
+    new_block = block
+    if "<FILE class=\"CFile\">" not in new_block:
+        for f in files:
+            status[f] = "block_missing"
+        return new_block, status
+
+    for filename, content in files.items():
+        escaped = _pt_html_escape(content)
+        # Match the FILE block whose NAME tag is exactly filename, then
+        # replace the inner TEXT. Use a non-greedy any-char run between
+        # <NAME> and <TEXT> so we stay within the same FILE block.
+        pat = re.compile(
+            r"(<FILE class=\"CFile\">[\s\S]*?<NAME>"
+            + re.escape(filename)
+            + r"</NAME>[\s\S]*?<TEXT>)[\s\S]*?(</TEXT>)",
+            re.DOTALL,
+        )
+        candidate, n = pat.subn(rf"\g<1>{escaped}\g<2>", new_block, count=1)
+        if n == 0:
+            status[filename] = "file_missing"
+        elif candidate == new_block:
+            status[filename] = "no_change"
+        else:
+            new_block = candidate
+            status[filename] = "applied"
+    return new_block, status
+
+
+# AP wireless: <WIRELESS_SERVER><WIRELESS_COMMON> carries SSID, ENCRYPT_TYPE,
+# AUTHEN_TYPE, and (for non-open auth) a WEP_PROCESS sub-block. Encoding
+# (probed in phase 4.9):
+#   open      → ENCRYPT_TYPE=0, AUTHEN_TYPE=0, no WEP_PROCESS
+#   wpa2-psk  → ENCRYPT_TYPE=4, AUTHEN_TYPE=4, WEP_PROCESS with KEY=passphrase
+# Other modes (WEP, WPA-PSK, WPA2-Enterprise) exist but aren't yet wired —
+# capture them on demand and add to _WIRELESS_AUTH_CODES.
+
+_WIRELESS_AUTH_CODES: dict[str, tuple[int, int, int]] = {
+    # auth_name: (ENCRYPT_TYPE, AUTHEN_TYPE, WEP_PROCESS_ENCRYPTION)
+    "open":     (0, 0, 0),
+    "wpa2-psk": (4, 4, 4),
+}
+
+_SSID_RE = re.compile(r"<SSID>[^<]*</SSID>")
+_ENC_RE = re.compile(r"<ENCRYPT_TYPE>\d+</ENCRYPT_TYPE>")
+_AUTH_RE = re.compile(r"<AUTHEN_TYPE>\d+</AUTHEN_TYPE>")
+_WEP_RE = re.compile(r"<WEP_PROCESS>[\s\S]*?</WEP_PROCESS>")
+_WIRELESS_COMMON_RE = re.compile(
+    r"<WIRELESS_COMMON>([\s\S]*?)</WIRELESS_COMMON>"
+)
+
+
+def _patch_ap_wireless(block: str, config: Mapping[str, str | int]) -> tuple[str, str]:
+    """Update SSID / auth-mode / passphrase inside <WIRELESS_COMMON>. Config
+    keys: ssid (str), auth ('open' | 'wpa2-psk'), passphrase (str, required
+    if auth='wpa2-psk'). Missing keys leave the corresponding XML element
+    untouched."""
+    if "<WIRELESS_SERVER>" not in block:
+        return block, "block_missing"
+
+    m = _WIRELESS_COMMON_RE.search(block)
+    if not m:
+        return block, "block_missing"
+
+    common_inner = m.group(1)
+    new_inner = common_inner
+
+    ssid = config.get("ssid")
+    if ssid is not None:
+        new_inner = _SSID_RE.sub(f"<SSID>{ssid}</SSID>", new_inner, count=1)
+
+    auth = config.get("auth")
+    if auth is not None:
+        auth_norm = str(auth).lower()
+        if auth_norm not in _WIRELESS_AUTH_CODES:
+            return block, f"unknown_auth:{auth}"
+        enc_v, auth_v, wep_enc_v = _WIRELESS_AUTH_CODES[auth_norm]
+        new_inner = _ENC_RE.sub(f"<ENCRYPT_TYPE>{enc_v}</ENCRYPT_TYPE>", new_inner, count=1)
+        new_inner = _AUTH_RE.sub(f"<AUTHEN_TYPE>{auth_v}</AUTHEN_TYPE>", new_inner, count=1)
+
+        if auth_norm == "open":
+            new_inner = _WEP_RE.sub("", new_inner, count=1)
+        else:
+            passphrase = config.get("passphrase", "")
+            wep_block = (
+                "<WEP_PROCESS>"
+                f"<KEY>{passphrase}</KEY>"
+                "<USERID></USERID>"
+                "<PASSWORD></PASSWORD>"
+                f"<ENCRYPTION>{wep_enc_v}</ENCRYPTION>"
+                "</WEP_PROCESS>"
+            )
+            if _WEP_RE.search(new_inner):
+                new_inner = _WEP_RE.sub(wep_block, new_inner, count=1)
+            else:
+                # Insert before STANDARD_CHANNEL5G if present, else before
+                # the close of WIRELESS_COMMON.
+                if "<STANDARD_CHANNEL5G>" in new_inner:
+                    new_inner = new_inner.replace(
+                        "<STANDARD_CHANNEL5G>", wep_block + "<STANDARD_CHANNEL5G>", 1
+                    )
+                else:
+                    new_inner = new_inner.rstrip() + wep_block
+
+    new_block = block[:m.start(1)] + new_inner + block[m.end(1):]
+    if new_block == block:
+        return block, "no_change"
+    return new_block, "applied"
+
+
+# ── shared decrypt/encrypt skeleton ───────────────────────────────────────
+
+
+def _load_xml(pkt_path: str) -> str:
+    with open(pkt_path, "rb") as f:
+        return decrypt_pkt(f.read()).decode("utf-8")
+
+
+def _save_pkt(xml: str, output_path: str) -> int:
+    out_bytes = encrypt_pkt_xml(xml.encode("utf-8"))
+    with open(output_path, "wb") as f:
+        f.write(out_bytes)
+    return len(out_bytes)
+
+
+def _patch_each_device(
+    xml: str,
+    targets: Mapping[str, object],
+    patcher,
+) -> tuple[str, dict[str, object]]:
+    """For each device in `targets`, locate its <DEVICE>…</DEVICE> block by
+    <NAME> match and pass it through `patcher(block, targets[device_name])`.
+    The patcher must return (new_block, status) where status is anything
+    JSON-serializable (string or per-sub-key dict).
+
+    Returns (patched_xml, report) where report[device_name] = status, plus
+    "device_missing" for any name never seen in the XML."""
+    report: dict[str, object] = {}
+    seen: set[str] = set()
+
+    def replace_device(match: re.Match) -> str:
+        block = match.group(1)
+        name_m = _NAME_RE.search(block)
+        if not name_m:
+            return match.group(0)
+        device_name = name_m.group(1)
+        if device_name not in targets:
+            return match.group(0)
+        seen.add(device_name)
+        new_block, status = patcher(block, targets[device_name])
+        report[device_name] = status
+        return f"<DEVICE>{new_block}</DEVICE>"
+
+    patched = _DEVICE_RE.sub(replace_device, xml)
+    for name in targets:
+        if name not in seen:
+            report[name] = "device_missing"
+    return patched, report
+
+
 # ── public API ─────────────────────────────────────────────────────────────
 
 
@@ -168,23 +389,119 @@ def set_pkt_services(
     """
     if output_path is None:
         output_path = pkt_path
-
-    with open(pkt_path, "rb") as f:
-        encrypted = f.read()
-
-    xml = decrypt_pkt(encrypted).decode("utf-8")
+    xml = _load_xml(pkt_path)
     patched, report = _patch_xml(xml, services)
-    out_bytes = encrypt_pkt_xml(patched.encode("utf-8"))
+    size = _save_pkt(patched, output_path)
+    return {"input": pkt_path, "output": output_path, "report": report, "size": size}
 
-    with open(output_path, "wb") as f:
-        f.write(out_bytes)
 
-    return {
-        "input":  pkt_path,
-        "output": output_path,
-        "report": report,
-        "size":   len(out_bytes),
-    }
+def set_pkt_dns_records(
+    pkt_path: str,
+    records_by_device: Mapping[str, Mapping[str, str]],
+    *,
+    output_path: str | None = None,
+) -> dict:
+    """Replace the DNS A-record set on one or more Server-PTs.
+
+    Args:
+        pkt_path: Path to existing .pkt file.
+        records_by_device: {device_name: {hostname: ip_address, ...}, ...}.
+                          Passing an empty inner dict clears all records for
+                          that server. NOT additive — the existing record
+                          set is replaced wholesale.
+        output_path: Defaults to overwriting pkt_path.
+
+    Returns the same envelope as set_pkt_services. Status per device:
+        "applied" / "no_change" / "block_missing" / "device_missing".
+
+    Note: DNS service must also be ENABLED for queries to resolve. Use
+    set_pkt_services({"<srv>": {"DNS": True}}) to flip the service flag.
+    """
+    if output_path is None:
+        output_path = pkt_path
+    xml = _load_xml(pkt_path)
+
+    def patcher(block: str, records: Mapping[str, str]) -> tuple[str, str]:
+        return _patch_dns_records(block, records)
+
+    patched, report = _patch_each_device(xml, records_by_device, patcher)
+    size = _save_pkt(patched, output_path)
+    return {"input": pkt_path, "output": output_path, "report": report, "size": size}
+
+
+def set_pkt_http_files(
+    pkt_path: str,
+    files_by_device: Mapping[str, Mapping[str, str]],
+    *,
+    output_path: str | None = None,
+) -> dict:
+    """Replace HTTP file content on one or more Server-PTs.
+
+    Args:
+        pkt_path: Path to existing .pkt file.
+        files_by_device: {device_name: {filename: html_content, ...}, ...}.
+                        filename must match an existing file on the server
+                        (PT auto-creates index.html, helloworld.html,
+                        copyrights.html, image.html). Content is raw HTML;
+                        '<' and '&' are escaped automatically per PT's
+                        wire format.
+        output_path: Defaults to overwriting pkt_path.
+
+    Returns the same envelope as set_pkt_services. Per-device status is
+    itself a dict {filename: status}. file-level status:
+        "applied" / "no_change" / "file_missing" / "block_missing".
+
+    Limitation: only modifies existing files. Creating new files would
+    require updating <FILE_NUMBER>, <FILE_COUNTER>, and inserting a new
+    <FILE> block — not yet implemented.
+    """
+    if output_path is None:
+        output_path = pkt_path
+    xml = _load_xml(pkt_path)
+
+    def patcher(block: str, files: Mapping[str, str]) -> tuple[str, dict]:
+        return _patch_http_files(block, files)
+
+    patched, report = _patch_each_device(xml, files_by_device, patcher)
+    size = _save_pkt(patched, output_path)
+    return {"input": pkt_path, "output": output_path, "report": report, "size": size}
+
+
+def set_pkt_ap_wireless(
+    pkt_path: str,
+    config_by_device: Mapping[str, Mapping[str, str | int]],
+    *,
+    output_path: str | None = None,
+) -> dict:
+    """Set SSID, auth mode, and passphrase on one or more Access Points.
+
+    Args:
+        pkt_path: Path to existing .pkt file.
+        config_by_device: {device_name: {key: val, ...}, ...} where keys are:
+            "ssid":       str — broadcast SSID
+            "auth":       "open" | "wpa2-psk"  (case-insensitive)
+            "passphrase": str — required iff auth="wpa2-psk", 8-63 chars
+            Omitted keys leave the corresponding XML element untouched.
+        output_path: Defaults to overwriting pkt_path.
+
+    Returns the same envelope as set_pkt_services. Status per device:
+        "applied" / "no_change" / "block_missing" / "device_missing" /
+        "unknown_auth:<val>".
+
+    Limitation: only 'open' and 'wpa2-psk' modes wired. WEP, WPA-PSK, and
+    WPA2-Enterprise have code points but need probe captures to confirm
+    the WEP_PROCESS layout — see _WIRELESS_AUTH_CODES in this module.
+    """
+    if output_path is None:
+        output_path = pkt_path
+    xml = _load_xml(pkt_path)
+
+    def patcher(block: str, cfg: Mapping[str, str | int]) -> tuple[str, str]:
+        return _patch_ap_wireless(block, cfg)
+
+    patched, report = _patch_each_device(xml, config_by_device, patcher)
+    size = _save_pkt(patched, output_path)
+    return {"input": pkt_path, "output": output_path, "report": report, "size": size}
 
 
 # ── CLI for ad-hoc use ─────────────────────────────────────────────────────

@@ -33,6 +33,9 @@ sys.path.insert(
 from pkt_bridge import Bridge, BridgeError, PtNotFound  # noqa: E402
 from pkt_services import (  # noqa: E402
     set_pkt_services as _set_pkt_services,
+    set_pkt_dns_records as _set_pkt_dns_records,
+    set_pkt_http_files as _set_pkt_http_files,
+    set_pkt_ap_wireless as _set_pkt_ap_wireless,
     SERVICE_NAMES as _SERVICE_NAMES,
 )
 
@@ -880,6 +883,137 @@ def set_pkt_services(
                 )
     try:
         return _set_pkt_services(pkt_path, services)
+    except FileNotFoundError as e:
+        raise ToolError(f"PT_NOT_FOUND: {e}") from e
+    except (ValueError, IOError) as e:
+        raise ToolError(f"INTERNAL: {e}") from e
+
+
+@mcp.tool()
+def set_pkt_dns_records(
+    pkt_path: str,
+    records: dict,
+) -> dict:
+    """Replace the DNS A-record set on Server-PT devices in a saved .pkt.
+
+    PT 9 stores DNS records in the device XML; the GUI's Add/Remove buttons
+    on the Services → DNS tab edit this list. No JS-bridge path exists for
+    runtime mutation (probed in phase 4.8), but the file-rewrite pipeline
+    (decrypt → patch → re-encrypt) does. Vendored Unpacket library
+    (tools/unpacket/, MIT) handles the crypto.
+
+    Args:
+        pkt_path: Absolute path to existing .pkt file. Service must already
+                  be ENABLED for DNS resolution to work — use set_pkt_services
+                  with DNS=True if not already on.
+        records:  {device_name: {hostname: ip_address, ...}, ...}. Replaces
+                  the existing record set wholesale (not additive). Pass an
+                  empty inner dict to clear all records for a server.
+
+    Returns: same envelope shape as set_pkt_services. Status per device:
+        "applied" / "no_change" / "block_missing" / "device_missing".
+
+    Workflow:
+        save_pkt → set_pkt_services({"SRV-DNS": {"DNS": True}})
+                 → set_pkt_dns_records({"SRV-DNS": {"www.lab.local": "10.0.0.10"}})
+                 → File→Open the .pkt in PT to load.
+    """
+    if not pkt_path.startswith("/"):
+        raise ToolError("BAD_ARGS: pkt_path must be absolute (start with '/')")
+    if not isinstance(records, dict) or not records:
+        raise ToolError("BAD_ARGS: records must be a non-empty dict")
+    try:
+        return _set_pkt_dns_records(pkt_path, records)
+    except FileNotFoundError as e:
+        raise ToolError(f"PT_NOT_FOUND: {e}") from e
+    except (ValueError, IOError) as e:
+        raise ToolError(f"INTERNAL: {e}") from e
+
+
+@mcp.tool()
+def set_pkt_http_files(
+    pkt_path: str,
+    files: dict,
+) -> dict:
+    """Replace HTTP file content on Server-PT devices in a saved .pkt.
+
+    Modifies <FILE class="CFile"> entries on the server, swapping the
+    inner <TEXT> for new HTML. PT auto-creates index.html, helloworld.html,
+    copyrights.html, image.html on a fresh Server-PT — only existing files
+    can be modified (creating new files would require updating FILE_NUMBER /
+    FILE_COUNTER / inserting <FILE> blocks, not yet implemented).
+
+    Args:
+        pkt_path: Absolute path to existing .pkt file.
+        files: {device_name: {filename: html_content, ...}, ...}. Filenames
+               must match existing files. HTML content is raw — '<' and '&'
+               are auto-escaped per PT's wire format ('>' is left literal).
+
+    Returns:
+        Same envelope shape as set_pkt_services. Per-device status is a
+        dict {filename: status} where status is:
+        "applied" / "no_change" / "file_missing" / "block_missing".
+
+    Workflow:
+        save_pkt → set_pkt_services({"SRV-WEB": {"HTTP": True}})
+                 → set_pkt_http_files({"SRV-WEB": {"index.html":
+                       "<html><body><h1>NovaCore</h1></body></html>"}})
+                 → File→Open the .pkt in PT to load.
+    """
+    if not pkt_path.startswith("/"):
+        raise ToolError("BAD_ARGS: pkt_path must be absolute (start with '/')")
+    if not isinstance(files, dict) or not files:
+        raise ToolError("BAD_ARGS: files must be a non-empty dict")
+    try:
+        return _set_pkt_http_files(pkt_path, files)
+    except FileNotFoundError as e:
+        raise ToolError(f"PT_NOT_FOUND: {e}") from e
+    except (ValueError, IOError) as e:
+        raise ToolError(f"INTERNAL: {e}") from e
+
+
+@mcp.tool()
+def set_pkt_ap_wireless(
+    pkt_path: str,
+    config: dict,
+) -> dict:
+    """Set SSID, auth mode, and passphrase on Access Point devices in a
+    saved .pkt.
+
+    The PT Config tab on an AP carries SSID and authentication settings
+    inside <WIRELESS_SERVER><WIRELESS_COMMON> in the device XML. Authentication
+    mode is encoded as a pair of ints (ENCRYPT_TYPE / AUTHEN_TYPE):
+        0/0 = Open
+        4/4 = WPA2-PSK (with WEP_PROCESS sub-block carrying the passphrase)
+    WPA-PSK and WEP modes have code points too but are not yet wired in
+    pkt-mcp — capture them on demand and add to _WIRELESS_AUTH_CODES in
+    tools/pkt_services.py.
+
+    Args:
+        pkt_path: Absolute path to existing .pkt file.
+        config: {device_name: {key: val, ...}, ...} where keys are:
+            "ssid":       str (broadcast SSID)
+            "auth":       "open" | "wpa2-psk" (case-insensitive)
+            "passphrase": str (required iff auth="wpa2-psk", 8-63 chars)
+            Omitted keys leave the corresponding XML element untouched —
+            e.g. you can change SSID without touching auth.
+
+    Returns:
+        Same envelope shape as set_pkt_services. Status per device:
+        "applied" / "no_change" / "block_missing" / "device_missing" /
+        "unknown_auth:<value>".
+
+    Workflow:
+        save_pkt → set_pkt_ap_wireless({"AP-1": {"ssid": "Corp",
+                       "auth": "wpa2-psk", "passphrase": "P@ssw0rd!2026"}})
+                 → File→Open the .pkt in PT to load.
+    """
+    if not pkt_path.startswith("/"):
+        raise ToolError("BAD_ARGS: pkt_path must be absolute (start with '/')")
+    if not isinstance(config, dict) or not config:
+        raise ToolError("BAD_ARGS: config must be a non-empty dict")
+    try:
+        return _set_pkt_ap_wireless(pkt_path, config)
     except FileNotFoundError as e:
         raise ToolError(f"PT_NOT_FOUND: {e}") from e
     except (ValueError, IOError) as e:

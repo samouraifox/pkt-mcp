@@ -235,26 +235,44 @@ on the canvas directly. Out of scope for phase 4.7.
     explicitly: `["enable", "", "show running-config"]`.
 
 ### Things PT 9.0.0 doesn't support
-- **Server-PT services are NOT runtime-scriptable, BUT they ARE
-  file-patchable** (phase 4.8 update). The Q_INVOKABLE service classes
-  (`CServerHttp`, `CServerDns`, `CServerDhcp`, `CServerMail`,
-  `ServerSyslog`) exist in C++ but the Server-PT device's JS surface
-  doesn't expose them — `getProcess(<name>)` and every `get*` accessor
-  on the device returns null. So you can't flip services in a running PT
-  session via this MCP. **BUT** the saved .pkt file carries the service
-  state as XML, and PT 9 uses the same Twofish-EAX + obfuscation
+- **Server-PT services + DNS records + HTTP file content + AP wireless
+  are NOT runtime-scriptable, BUT they ARE file-patchable** (phases
+  4.8 + 4.9). The Q_INVOKABLE service classes (`CServerHttp`, `CServerDns`,
+  `CServerDhcp`, `CServerMail`, `ServerSyslog`) exist in C++ but the
+  Server-PT/Access-Point device's JS surface doesn't expose service or
+  wireless config — `getProcess(<name>)` returns null, no `setSsid` /
+  `setEnabled` setters. So you can't mutate any of this in a running PT
+  session via the JS bridge. **BUT** the saved .pkt file carries every
+  state value as XML, and PT 9 uses the same Twofish-EAX + obfuscation
   pipeline as prior versions (cracked & vendored under `tools/unpacket/`,
-  MIT — Punkcake21/Unpacket). The `set_pkt_services(pkt_path, services)`
-  MCP tool decrypts, patches the enable flag in XML, re-encrypts.
-  Workflow: `save_pkt → set_pkt_services → File→Open in PT`. Covers
-  HTTP / HTTPS / DNS / TFTP / NTP / FTP / SYSLOG / AAA / SMTP / POP3 /
-  NETFLOW. Doesn't yet cover service *contents* (DNS A-records, HTTP
-  files, DHCP pools, POP3 mailboxes) — those need richer XML editing,
-  future work.
-- **Wireless SSID / authentication on AP is GUI-only.** Access-Point-PT
-  exposes `getCommandLine()` but no SSID/auth setters at the device or
-  port level — only `getChannel`/`setChannel`/`setBandwidth` on the
-  wireless port. SSID, WPA2-PSK, passphrase = GUI Config tab.
+  MIT — Punkcake21/Unpacket). Four MCP tools cover the file-patch path:
+    * `set_pkt_services(pkt, {dev: {svc: bool}})` — HTTP/HTTPS/DNS/TFTP/
+      NTP/FTP/SYSLOG/AAA/SMTP/POP3/NETFLOW on/off (phase 4.8).
+    * `set_pkt_dns_records(pkt, {dev: {hostname: ip}})` — replaces the
+      A-record set (NAMESERVER-DATABASE / RESOURCE-RECORD, TYPE=A-REC,
+      TTL=86400 hardcoded). DNS service must be enabled separately
+      (phase 4.9).
+    * `set_pkt_http_files(pkt, {dev: {filename: html}})` — modifies the
+      `<TEXT>` of an existing `<FILE class="CFile">` matched by `<NAME>`.
+      Default files PT auto-creates: `index.html`, `helloworld.html`,
+      `copyrights.html`, `image.html`. New-file creation not yet
+      implemented (would need FILE_NUMBER / FILE_COUNTER bookkeeping)
+      (phase 4.9). PT's HTML escape is asymmetric: `<` → `&lt;` and
+      `&` → `&amp;`, but `>` stays literal — mirror this in any custom
+      patching.
+    * `set_pkt_ap_wireless(pkt, {dev: {ssid, auth, passphrase}})` — sets
+      SSID + auth mode + passphrase inside `<WIRELESS_COMMON>`. Auth
+      modes wired today: `"open"` (ENCRYPT_TYPE=0, AUTHEN_TYPE=0) and
+      `"wpa2-psk"` (4 / 4, plus `<WEP_PROCESS>` sub-block with the
+      passphrase — named WEP_PROCESS for legacy reasons even for WPA2).
+      WEP / WPA-PSK / WPA2-Enterprise have code points but aren't wired
+      yet — capture them on demand and add to `_WIRELESS_AUTH_CODES`
+      (phase 4.9).
+  Workflow for any of these: `save_pkt → set_pkt_* → File→Open in PT`.
+  Open service contents NOT yet patchable: DHCP server pools on Server-PT,
+  POP3/SMTP mailbox accounts, RADIUS users + NAS clients, TFTP file
+  content. Probe schemas via diff and extend `tools/pkt_services.py`
+  when needed.
 
 ### Things PT 9.0.0 DOES support (corrections to prior verdicts)
 - **CME is present, on the right router model.** Use `2811` (the
