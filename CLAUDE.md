@@ -122,11 +122,82 @@ of an unverified L2 wastes an hour debugging the wrong layer.
   than letting PT auto-rename `R1 → R1-1`. Either `delete_device(name)`
   first, or pick a unique name. The error includes `existing_uuid`.
 
+## Router model → feature matrix (phase 4.7, May 2026)
+
+**The single most important table for portfolio building.** Each PT
+router model carries a different IOS image variant; picking the right
+model gives you the feature set you need with zero license activation.
+
+| Model | IOS image | Crypto/IPsec | Classic CME (telephony-service / ephone-dn) | Notes |
+|---|---|:-:|:-:|---|
+| `2811` | advipservicesk9 | ✅ | ✅ | **Swiss-army knife — use for VPN gateway AND voice gateway** |
+| `1841` | advipservicesk9 | ✅ | ✗ | Smaller, crypto-only |
+| `ISR4321` | universalk9 | ✅ | ✗ | Modern ISR, no classic CME |
+| `ISR4331` | universalk9 | ✅ | ✗ | Modern ISR, no classic CME |
+| `2901` | universalk9 lite | ✗ | ✗ | Not for crypto/voice — pick something else |
+| `2911` | ipbase | ✗ | ✗ | **Default many builds reach for, but no crypto/voice** |
+
+Rules of thumb for portfolio design:
+- VPN/IPsec router → `2811` (full classic crypto stack: isakmp/ipsec/map) or
+  `ISR4321/4331` (modern universalk9, no `telephony-service`).
+- CME / voice gateway → `2811` is the **only** confirmed-working choice.
+- Pure L3 / WAN router with no crypto → `2911` is fine and well-supported.
+
+The previous portfolio's "K9 license must be activated via GUI" verdict
+was wrong: there's no license activation needed. The "license" comes
+baked into the router model. Switching the right routers to `2811` closes
+both 17.4 IPsec and 17.9 Voice without any code changes.
+
+The previous "CME is REMOVED from PT 9" verdict was also wrong: CME
+(classic, the `telephony-service` / `ephone-dn` flavour, not SIP CME) is
+fully present — strings sweep shows `CCMEProcess`, `Cmeprocess::getLinenumber`,
+`telephony-service`, `dial-peer voice`. SIP CME (`voice register global`) is
+NOT in this binary but classic CME suffices for portfolio voice.
+
 ## PT 9.0.0 specifics (from portfolio-network build, May 2026)
 
 Lessons from a full portfolio build that hit the limits of PT 9.0.0 vs
 older releases. Bank these so the next portfolio re-run lands cleanly
 without raw bridge workarounds.
+
+### Device types wired in phase 4.7 (14 new + 16 total ints confirmed)
+
+A brute-force probe enumerated PT 9's device-type enum. Confirmed (int,
+model) pairs now wired in `DEVICE_TYPES` (`pt-script-module/api.js`):
+
+| Int | Type | Common model | Probe layer |
+|---|---|---|---|
+| 0  | ROUTER | 2911 / 2811 / 1841 / 2901 / ISR4321 / ISR4331 | known |
+| 1  | SWITCH | 2960-24TT | known |
+| 2  | CLOUD | Cloud-PT, Cloud-PT-Empty | new (4.7) |
+| 3  | BRIDGE | Bridge-PT | new (4.7) |
+| 4  | HUB | Hub-PT | known |
+| 5  | REPEATER | Repeater-PT | new (4.7) |
+| 7  | ACCESS_POINT | AccessPoint-PT, AP-PT-A/-AC/-N | **new (4.7)** |
+| 8  | PC | PC-PT | known |
+| 9  | SERVER | Server-PT | known |
+| 10 | PRINTER | Printer-PT | **new (4.7)** |
+| 11 | WIRELESS_ROUTER | Linksys-WRT300N | known |
+| 12 | IP_PHONE | 7960, IPPhone-PT | known |
+| 13 | DSL_MODEM | DSL-Modem-PT | new (4.7) |
+| 14 | CABLE_MODEM | Cable-Modem-PT | new (4.7) |
+| 16 | MULTILAYER_SWITCH | 3560-24PS, 3650-24PS | 4.6 |
+| 18 | LAPTOP | Laptop-PT | **new (4.7)** |
+| 19 | TABLET | TabletPC-PT | new (4.7) |
+| 20 | SMARTPHONE | SMARTPHONE-PT | **new (4.7)** |
+| 21 | WIRELESS_END_DEVICE | WirelessEndDevice-PT | **new (4.7) — generic IoT** |
+| 22 | WIRED_END_DEVICE | WiredEndDevice-PT | **new (4.7) — generic IoT** |
+| 23 | TV | TV-PT | new (4.7) |
+| 24 | HOME_VOIP | Home-VoIP-PT | new (4.7) |
+| 25 | ANALOG_PHONE | Analog-Phone-PT | new (4.7) |
+| 27 | ASA | 5506-X, 5505 | 4.6 |
+| 31 | CELL_TOWER | Cell-Tower | **new (4.7)** |
+
+Unmatched in probe 2 (may still exist via module-based placement, not
+top-level addDevice): `Sniffer`, `MCU-PT`, `PLC-PT`, `SBC-PT`, `e-PT`,
+`Embedded-Server-PT`, `WLC-PT`, `LAP-PT`, `MCUComponent-PT`. The first
+six are typically dropped into a MCU/CPU module slot rather than placed
+on the canvas directly. Out of scope for phase 4.7.
 
 ### Device wiring landed in phase 4.6
 - **MULTILAYER_SWITCH (type=16).** Use for L3 switches like the 3560-24PS.
@@ -159,25 +230,58 @@ without raw bridge workarounds.
     explicitly: `["enable", "", "show running-config"]`.
 
 ### Things PT 9.0.0 doesn't support
-- **CME (Communications Manager Express) is REMOVED.** Confirmed by
-  `strings PacketTracer | grep -i 'telephony\|ephone\|cme'` returning
-  zero hits. Voice features (`telephony-service`, `ephone`, `voice
-  register global`) are rejected as Invalid Input even after loading
-  the `uck9` license. Phones can be placed and cabled but will never
-  register. **Use PT 8.x for any voice-required portfolio.** In PT 9,
-  the voice spec sections must be skipped or stubbed.
-- **Server-PT HTTP/DNS services are NOT scriptable via PT IPC.** The
-  Server-PT JS object surface has 104 methods, none for `getHttpService`
-  / `getDnsService` / `getDhcpService`. Service config (HTTP enable +
-  files, DNS A-records, DHCP scopes) lives behind the GUI Services tab
-  and can't be reached from `pkt-mcp`. Recipe for portfolios that need
-  HTTP/DNS end-to-end: build the topology + ACL/NAT chain via this MCP,
-  then manually open Server → Services → HTTP/DNS → enable + add records
-  through the GUI for the verification phase.
-- **`crypto key generate rsa modulus 1024`** (or any modulus arg) is
-  rejected by PT 9.0.0's CLI parser. PT 9 wants the legacy interactive
-  form. SSH keygen on routers needs to be done via the GUI's CLI tab,
-  not through scripted `run_commands`.
+- **Server-PT HTTP/DNS services are NOT scriptable via PT IPC.** Two
+  probe iterations (phase 4.6 + phase 4.7 probe 2) confirm: the Qt
+  service classes (`CServerHttp`, `CServerDns`, `CServerDhcp`,
+  `CServerMail`, `ServerSyslog`) exist as Q_INVOKABLE classes in C++,
+  but the Server-PT device's JS surface does NOT expose them — neither
+  `getProcess(<name>)`, nor any of the device's `get*` accessors return
+  the service objects. Service config (HTTP enable + files, DNS A-records,
+  DHCP scopes, mail relay, etc.) is reachable only via the GUI Services
+  tab. Recipe for portfolios needing HTTP/DNS end-to-end: build the
+  topology + ACL/NAT chain via this MCP, then manually open Server →
+  Services → HTTP/DNS → enable + add records through the GUI for the
+  verification phase.
+- **Wireless SSID / authentication on AP is GUI-only.** Access-Point-PT
+  exposes `getCommandLine()` but no SSID/auth setters at the device or
+  port level — only `getChannel`/`setChannel`/`setBandwidth` on the
+  wireless port. SSID, WPA2-PSK, passphrase = GUI Config tab.
+
+### Things PT 9.0.0 DOES support (corrections to prior verdicts)
+- **CME is present, on the right router model.** Use `2811` (the
+  advipservicesk9 image): `telephony-service`, `max-ephones`, `max-dn`,
+  `ip source-address X port 2000`, `auto assign N to M`, `ephone-dn N`,
+  `number XXXX` all accepted. The earlier "CME removed" verdict was a
+  false negative from testing on a `2911` (IPbase image, no voice).
+- **Full classic IPsec stack works on the right router model.**
+  `crypto isakmp policy / encryption / hash / authentication pre-share /
+  group`, `crypto isakmp key`, `crypto ipsec transform-set`,
+  `crypto map ... ipsec-isakmp`, `set peer / set transform-set /
+  match address` all accepted on `2811`, `1841`, `ISR4321`, `ISR4331`.
+  Rejected on `2911`, `2901` (IPbase image, no crypto). No license
+  activation is required — the feature set is selected by router model.
+- **RSA keygen works in interactive form, not single-line.** PT 9
+  rejects `crypto key generate rsa modulus 1024`. The accepted pattern:
+  ```python
+  bridge.run_commands(R, [
+      "enable", "configure terminal",
+      "hostname R1", "ip domain-name lab.local",
+      "crypto key generate rsa",   # PT prompts "How many bits in the modulus [512]: "
+      "2048",                      # answer to the prompt
+      "end",
+  ])
+  ```
+  The modulus prompt is the next CLI line after `crypto key generate
+  rsa` — the multi-line `run_commands` pattern handles it transparently.
+
+### IOS error markers — `% NOTE:` / `% Warning` are not errors
+`op_run_commands` (api.js `detectIosError`) treats lines starting with
+`% ` as errors EXCEPT for `% NOTE:` and `% Warning:`, which IOS prints
+as informational hints. Real-world case: `crypto map VPNMAP 10
+ipsec-isakmp` always prints `% NOTE: This new crypto map will remain
+disabled until a peer and a valid access list have been configured.` —
+that's the normal IOS workflow signal, not a failure. Earlier crypto
+test runs falsely "failed" on this; fixed in phase 4.7.
 
 ### Cisco patterns that are real, not hacks
 - **Fa-Fa trunk fallback when Gi uplinks are constrained.** A 24-port

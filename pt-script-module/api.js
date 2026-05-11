@@ -27,17 +27,35 @@
 var DEFER = "__pkt_mcp_DEFER__";
 
 // Device-type enum (per phase2-api-map.md M1 — extend cautiously, only ints
-// with a runtime-confirmed model belong here).
+// with a runtime-confirmed model belong here). Phase 4.7 added 14 new types
+// after a brute-force probe of (int, model) pairs; see probes/phase47_probe.js
+// and CLAUDE.md "Device types" section for the confirmed model strings.
 var DEVICE_TYPES = {
-    ROUTER: 0,
-    SWITCH: 1,
-    HUB: 4,
-    PC: 8,
-    SERVER: 9,
-    WIRELESS_ROUTER: 11,
-    IP_PHONE: 12,
-    MULTILAYER_SWITCH: 16,
-    ASA: 27
+    ROUTER:              0,    // 2911, 2811, 1841, 2901, ISR4321, ISR4331
+    SWITCH:              1,    // 2960-24TT
+    CLOUD:               2,    // Cloud-PT, Cloud-PT-Empty
+    BRIDGE:              3,    // Bridge-PT
+    HUB:                 4,    // Hub-PT
+    REPEATER:            5,    // Repeater-PT
+    ACCESS_POINT:        7,    // AccessPoint-PT, AccessPoint-PT-A/-AC/-N
+    PC:                  8,    // PC-PT
+    SERVER:              9,    // Server-PT
+    PRINTER:             10,   // Printer-PT
+    WIRELESS_ROUTER:     11,   // Linksys-WRT300N
+    IP_PHONE:            12,   // 7960, IPPhone-PT
+    DSL_MODEM:           13,   // DSL-Modem-PT
+    CABLE_MODEM:         14,   // Cable-Modem-PT
+    MULTILAYER_SWITCH:   16,   // 3560-24PS, 3560-24PH, 3650-24PS
+    LAPTOP:              18,   // Laptop-PT
+    TABLET:              19,   // TabletPC-PT
+    SMARTPHONE:          20,   // SMARTPHONE-PT
+    WIRELESS_END_DEVICE: 21,   // WirelessEndDevice-PT
+    WIRED_END_DEVICE:    22,   // WiredEndDevice-PT
+    TV:                  23,   // TV-PT
+    HOME_VOIP:           24,   // Home-VoIP-PT
+    ANALOG_PHONE:        25,   // Analog-Phone-PT
+    ASA:                 27,   // 5506-X, 5505
+    CELL_TOWER:          31    // Cell-Tower
 };
 
 var DEVICE_TYPE_BY_INT = {};
@@ -755,13 +773,18 @@ function op_run_commands(args, done) {
     // Detect IOS error markers in a command's output slice. IOS prints
     // "% Invalid input detected at '^' marker.", "% Incomplete command.",
     // "% Ambiguous command:", "% Unknown ...", etc. — all start with "% ".
+    // Whitelist "% NOTE:" and "% Warning" which are informational. Real-world
+    // case from phase 4.7: `crypto map X 10 ipsec-isakmp` prints
+    // "% NOTE: This new crypto map will remain disabled until a peer and a
+    // valid access list have been configured." — that's the normal IOS
+    // workflow, not an error.
     function detectIosError(thisOut) {
         var lines = thisOut.split("\n");
         for (var j = 0; j < lines.length; j++) {
             var ln = lines[j];
-            // Trim leading whitespace only — preserve the message body.
             var t = ln.replace(/^\s+/, "");
             if (t.length >= 2 && t.charAt(0) === "%" && t.charAt(1) === " ") {
+                if (/^%\s+(NOTE|Warning)/i.test(t)) continue;
                 return t;
             }
         }

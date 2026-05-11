@@ -57,7 +57,7 @@ def _call(fn, *args, **kwargs):
 
 # ── helper-tool support ──────────────────────────────────────────────────
 
-_HOST_TYPES = frozenset({"PC", "SERVER"})
+_HOST_TYPES = frozenset({"PC", "SERVER", "LAPTOP", "PRINTER"})
 _SWITCH_TYPES = frozenset({"SWITCH"})
 
 # Curated port probe sets for summarize_topology. There's no list_ports op
@@ -66,17 +66,45 @@ _SWITCH_TYPES = frozenset({"SWITCH"})
 # targets, these cover everything; high-port-number switches (Fa0/9+) need
 # explicit get_port_state calls. Add a list_ports JS op in a later phase
 # if this becomes a real limitation.
+#
+# Phase 4.7 additions: Access Point uses "Port 0"/"Port 1" (radio + ethernet,
+# probe-confirmed). Laptop/Printer share PC's FastEthernet0 layout.
+# Smartphone/Tablet/TV/WirelessEndDevice are wireless-only; their wireless
+# port doesn't carry an IP on the IOS-style port API so we skip them — they
+# show up in list_devices but not in active-port summaries.
 _PORT_PROBE: dict[str, list[str]] = {
-    "ROUTER":          [f"GigabitEthernet0/{i}" for i in range(3)] +
-                       [f"Serial0/0/{i}" for i in range(2)] +
-                       [f"FastEthernet0/{i}" for i in range(2)],
-    "SWITCH":          [f"FastEthernet0/{i}" for i in range(1, 9)] +
-                       ["GigabitEthernet0/1", "GigabitEthernet0/2"],
-    "PC":              ["FastEthernet0"],
-    "SERVER":          ["FastEthernet0"],
-    "WIRELESS_ROUTER": ["Internet", "Ethernet1", "Ethernet2",
-                        "Ethernet3", "Ethernet4"],
-    "HUB":             [],
+    "ROUTER":            [f"GigabitEthernet0/{i}" for i in range(3)] +
+                         [f"Serial0/0/{i}" for i in range(2)] +
+                         [f"FastEthernet0/{i}" for i in range(2)],
+    "SWITCH":            [f"FastEthernet0/{i}" for i in range(1, 9)] +
+                         ["GigabitEthernet0/1", "GigabitEthernet0/2"],
+    "MULTILAYER_SWITCH": [f"FastEthernet0/{i}" for i in range(1, 9)] +
+                         ["GigabitEthernet0/1", "GigabitEthernet0/2"],
+    "ASA":               [f"GigabitEthernet1/{i}" for i in range(1, 9)] +
+                         ["Management1/1"],
+    "PC":                ["FastEthernet0"],
+    "SERVER":            ["FastEthernet0"],
+    "LAPTOP":            ["FastEthernet0"],
+    "PRINTER":           ["FastEthernet0"],
+    "WIRELESS_ROUTER":   ["Internet", "Ethernet1", "Ethernet2",
+                          "Ethernet3", "Ethernet4"],
+    "ACCESS_POINT":      ["Port 0", "Port 1"],
+    "HUB":               [],
+    # Wireless-only / IoT / modem / specialty types — placeable + cabled but
+    # not probed by the IOS-style port API.
+    "SMARTPHONE":          [],
+    "TABLET":              [],
+    "TV":                  [],
+    "WIRED_END_DEVICE":    [],
+    "WIRELESS_END_DEVICE": [],
+    "HOME_VOIP":           [],
+    "ANALOG_PHONE":        [],
+    "CELL_TOWER":          [],
+    "DSL_MODEM":           [],
+    "CABLE_MODEM":         [],
+    "BRIDGE":              [],
+    "REPEATER":            [],
+    "CLOUD":               [],
 }
 
 
@@ -152,20 +180,47 @@ def add_device(type: str, name: str, model: str, x: float, y: float) -> dict:
     """Place a new device on the PT canvas.
 
     Args:
-        type: One of "ROUTER", "SWITCH", "MULTILAYER_SWITCH", "ASA",
-              "PC", "SERVER", "HUB", "WIRELESS_ROUTER", "IP_PHONE". Other
-              types exist in PT but are not yet wired through the Bridge.
+        type: One of the supported device types. Confirmed working types
+              and their typical models (probe-verified in phase 4.7):
+                "ROUTER" — "2911" (IPbase, no crypto/CME),
+                           "2811" (advipservicesk9 — CRYPTO + CME — the
+                              go-to for VPN+voice portfolio builds),
+                           "1841" (advipservicesk9 — CRYPTO, no CME),
+                           "2901" (universalk9 lite — no crypto),
+                           "ISR4321", "ISR4331" (universalk9 — modern
+                              crypto, no classic CME).
+                "SWITCH" — "2960-24TT".
+                "MULTILAYER_SWITCH" — "3560-24PS", "3560-24PH", "3650-24PS".
+                "ASA" — "5506-X" (9 ports + Management), "5505".
+                "PC" — "PC-PT".
+                "SERVER" — "Server-PT".
+                "LAPTOP" — "Laptop-PT".
+                "PRINTER" — "Printer-PT".
+                "TABLET" — "TabletPC-PT".
+                "SMARTPHONE" — "SMARTPHONE-PT" (note uppercase).
+                "ACCESS_POINT" — "AccessPoint-PT", "AccessPoint-PT-A",
+                                 "AccessPoint-PT-AC", "AccessPoint-PT-N".
+                "HUB" — "Hub-PT".
+                "WIRELESS_ROUTER" — "Linksys-WRT300N".
+                "IP_PHONE" — "7960", "IPPhone-PT".
+                "BRIDGE" — "Bridge-PT".
+                "REPEATER" — "Repeater-PT".
+                "DSL_MODEM" — "DSL-Modem-PT".
+                "CABLE_MODEM" — "Cable-Modem-PT".
+                "WIRED_END_DEVICE" — "WiredEndDevice-PT" (generic IoT).
+                "WIRELESS_END_DEVICE" — "WirelessEndDevice-PT" (generic IoT).
+                "TV" — "TV-PT".
+                "HOME_VOIP" — "Home-VoIP-PT".
+                "ANALOG_PHONE" — "Analog-Phone-PT".
+                "CELL_TOWER" — "Cell-Tower".
+                "CLOUD" — "Cloud-PT", "Cloud-PT-Empty".
+              Bad type/model is rejected silently by PT and returns
+              PT_REJECTED here.
         name: Unique device name (e.g. "R1", "SW1", "PC1"). Fails with
               PT_REJECTED if a device with the same name already exists —
               call delete_device first if you need to replace it.
-        model: PT model string. Must match a real PT model exactly. Known
-               working values: "2911" (ROUTER), "2960-24TT" (SWITCH),
-               "3560-24PS" (MULTILAYER_SWITCH; also "3560-24PH", "3560H",
-               "3650-24PS"), "5506-X" (ASA; also "5505" for the 5505
-               model), "PC-PT" (PC), "Server-PT" (SERVER), "Hub-PT"
-               (HUB), "Linksys-WRT300N" (WIRELESS_ROUTER), "7960"
-               (IP_PHONE). A bad model is rejected silently by PT and
-               returns PT_REJECTED here.
+        model: PT model string. Must match a real PT model exactly (see
+               the type list above for known working values).
         x, y: Canvas coordinates in pixels. Conventional spacing is ~200
               units between devices; pick something readable.
 

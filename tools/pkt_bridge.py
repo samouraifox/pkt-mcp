@@ -100,14 +100,34 @@ _ERROR_CLASSES: dict[str, type[BridgeError]] = {
 # no-op and confuse callers, so we raise BAD_ARGS instead.
 
 _TERMINAL_BY_TYPE: dict[str, str | None] = {
-    "ROUTER": "ios",
-    "SWITCH": "ios",
-    "MULTILAYER_SWITCH": "ios",
-    "WIRELESS_ROUTER": "ios",
-    "ASA": "ios",
-    "PC": "desktop",
-    "SERVER": "desktop",
-    "IP_PHONE": None,
+    "ROUTER":              "ios",
+    "SWITCH":              "ios",
+    "MULTILAYER_SWITCH":   "ios",
+    "WIRELESS_ROUTER":     "ios",
+    "ASA":                 "ios",
+    "PC":                  "desktop",
+    "SERVER":              "desktop",
+    "LAPTOP":              "desktop",
+    "TABLET":              "desktop",
+    "SMARTPHONE":          "desktop",
+    # Phase 4.7 placeable types with no CLI worth driving — phones / IoT /
+    # IP-only end devices / modems / hubs / repeaters / cell tower. They CAN
+    # have a getCommandLine() accessor (AP does), but it's not useful for
+    # config — wireless SSID / radio settings are GUI-only on the JS bridge.
+    "IP_PHONE":            None,
+    "ACCESS_POINT":        None,
+    "PRINTER":             None,
+    "DSL_MODEM":           None,
+    "CABLE_MODEM":         None,
+    "WIRELESS_END_DEVICE": None,
+    "WIRED_END_DEVICE":    None,
+    "TV":                  None,
+    "HOME_VOIP":           None,
+    "ANALOG_PHONE":        None,
+    "CELL_TOWER":          None,
+    "BRIDGE":              None,
+    "REPEATER":            None,
+    "CLOUD":               None,
 }
 
 # IOS commands whose intent is to drop privilege. If the caller issues one
