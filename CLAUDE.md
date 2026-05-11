@@ -10,12 +10,17 @@ topologies through it.
 `pkt-mcp` is an MCP server that drives Cisco Packet Tracer 9.0 from Claude.
 The plumbing chain is **Claude → MCP (`pkt_mcp/server.py`) → typed Bridge
 client (`tools/pkt_bridge.py`) → file mailbox (`/tmp/pkt-mcp/`) → Script
-Module inside PT (`pt-script-module/{main,api}.js`) → PT canvas**. The 12
-MCP tools are defined in `pkt_mcp/server.py`; their docstrings are the
+Module inside PT (`pt-script-module/{main,api}.js`) → PT canvas**. The MCP
+tools are defined in `pkt_mcp/server.py`; their docstrings are the
 authoritative API reference. For depth on any layer, see `docs/`:
 `architecture.md`, `phase1-investigation.md` (Java path, dead end),
 `phase2-api-map.md` (PT JS API surface), `phase3-protocol.md` (typed
 op/args wire), `phase4-mcp.md` (this MCP layer).
+
+Out-of-band: `tools/pkt_services.py` + vendored `tools/unpacket/` (MIT,
+Punkcake21/Unpacket) handle Server-PT service toggles by decrypting,
+patching, and re-encrypting saved .pkt files — needed because the
+service classes in PT aren't reachable from the JS bridge. See `set_pkt_services` tool docstring for usage.
 
 ## Defaults to apply automatically
 
@@ -230,18 +235,22 @@ on the canvas directly. Out of scope for phase 4.7.
     explicitly: `["enable", "", "show running-config"]`.
 
 ### Things PT 9.0.0 doesn't support
-- **Server-PT HTTP/DNS services are NOT scriptable via PT IPC.** Two
-  probe iterations (phase 4.6 + phase 4.7 probe 2) confirm: the Qt
-  service classes (`CServerHttp`, `CServerDns`, `CServerDhcp`,
-  `CServerMail`, `ServerSyslog`) exist as Q_INVOKABLE classes in C++,
-  but the Server-PT device's JS surface does NOT expose them — neither
-  `getProcess(<name>)`, nor any of the device's `get*` accessors return
-  the service objects. Service config (HTTP enable + files, DNS A-records,
-  DHCP scopes, mail relay, etc.) is reachable only via the GUI Services
-  tab. Recipe for portfolios needing HTTP/DNS end-to-end: build the
-  topology + ACL/NAT chain via this MCP, then manually open Server →
-  Services → HTTP/DNS → enable + add records through the GUI for the
-  verification phase.
+- **Server-PT services are NOT runtime-scriptable, BUT they ARE
+  file-patchable** (phase 4.8 update). The Q_INVOKABLE service classes
+  (`CServerHttp`, `CServerDns`, `CServerDhcp`, `CServerMail`,
+  `ServerSyslog`) exist in C++ but the Server-PT device's JS surface
+  doesn't expose them — `getProcess(<name>)` and every `get*` accessor
+  on the device returns null. So you can't flip services in a running PT
+  session via this MCP. **BUT** the saved .pkt file carries the service
+  state as XML, and PT 9 uses the same Twofish-EAX + obfuscation
+  pipeline as prior versions (cracked & vendored under `tools/unpacket/`,
+  MIT — Punkcake21/Unpacket). The `set_pkt_services(pkt_path, services)`
+  MCP tool decrypts, patches the enable flag in XML, re-encrypts.
+  Workflow: `save_pkt → set_pkt_services → File→Open in PT`. Covers
+  HTTP / HTTPS / DNS / TFTP / NTP / FTP / SYSLOG / AAA / SMTP / POP3 /
+  NETFLOW. Doesn't yet cover service *contents* (DNS A-records, HTTP
+  files, DHCP pools, POP3 mailboxes) — those need richer XML editing,
+  future work.
 - **Wireless SSID / authentication on AP is GUI-only.** Access-Point-PT
   exposes `getCommandLine()` but no SSID/auth setters at the device or
   port level — only `getChannel`/`setChannel`/`setBandwidth` on the

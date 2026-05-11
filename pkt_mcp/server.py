@@ -31,6 +31,10 @@ sys.path.insert(
 )
 
 from pkt_bridge import Bridge, BridgeError, PtNotFound  # noqa: E402
+from pkt_services import (  # noqa: E402
+    set_pkt_services as _set_pkt_services,
+    SERVICE_NAMES as _SERVICE_NAMES,
+)
 
 mcp = FastMCP("pkt-mcp")
 
@@ -806,6 +810,80 @@ def summarize_topology() -> str:
             lines.append(f"- **{subnet}** — {members_str}")
 
     return "\n".join(lines) + "\n"
+
+
+@mcp.tool()
+def set_pkt_services(
+    pkt_path: str,
+    services: dict,
+) -> dict:
+    """Toggle Server-PT services in a previously-saved .pkt file.
+
+    The PT 9 GUI Services tab (HTTP, DNS, DHCP, SMTP, NTP, Syslog, AAA, etc.)
+    is NOT reachable through PT's JS bridge — the C++ service classes
+    (CServerHttp, CServerDns, …) exist but aren't exposed at the device
+    level. The only programmatic path is the saved .pkt file itself: decrypt,
+    patch the enable flag in XML, re-encrypt. This tool wraps that pipeline
+    using the vendored Unpacket library (tools/unpacket/, MIT licensed).
+
+    Args:
+        pkt_path: Absolute path to an existing .pkt file (will be decrypted).
+                  Typically the file you just save_pkt'd.
+        services: Nested dict {device_name: {service_name: enabled_bool, ...}}.
+                  Service names (case-insensitive): "HTTP", "HTTPS", "DNS",
+                  "TFTP", "NTP", "FTP", "SYSLOG", "AAA" / "RADIUS", "SMTP",
+                  "POP3", "NETFLOW". Defaults you usually want to flip:
+                  DNS (off by default) and AAA/RADIUS (off by default); HTTP/
+                  HTTPS/NTP/SMTP/POP3/Syslog/FTP/TFTP are already on by
+                  default on a fresh Server-PT.
+
+    Returns:
+        {
+          "input":  <pkt_path>,
+          "output": <pkt_path>,
+          "report": {device: {service: status, ...}, ...},
+          "size":   <output bytes>,
+        }
+        Status values: "applied" (flag flipped), "no_change" (already at
+        target), "block_missing" (device exists but lacks that service
+        block), "device_missing" (no device by that name), "unknown_service".
+
+    Workflow:
+        1. Build the topology with the other MCP tools.
+        2. save_pkt("/tmp/foo.pkt").
+        3. set_pkt_services("/tmp/foo.pkt", {"SRV-DNS": {"DNS": True}, ...})
+        4. File → Open /tmp/foo.pkt in PT — services are now toggled.
+
+    Limitations:
+        - Top-level on/off only. Doesn't add DNS records, HTTP files, DHCP
+          pools, POP3 mailboxes — those need richer XML manipulation, not yet
+          implemented.
+        - DHCP service is per-port and structured differently; not exposed.
+        - Operates on the file, not the live in-memory state. PT must reopen
+          the .pkt for the change to take effect.
+    """
+    if not pkt_path.startswith("/"):
+        raise ToolError("BAD_ARGS: pkt_path must be absolute (start with '/')")
+    if not isinstance(services, dict) or not services:
+        raise ToolError("BAD_ARGS: services must be a non-empty dict")
+    # Validate service names early — better error than the patcher's
+    # downstream "unknown_service" entry buried in the report.
+    valid = {s.upper() for s in _SERVICE_NAMES}
+    for dev, svcs in services.items():
+        if not isinstance(svcs, dict):
+            raise ToolError(f"BAD_ARGS: services[{dev!r}] must be a dict")
+        for svc in svcs:
+            if svc.upper() not in valid:
+                raise ToolError(
+                    f"BAD_ARGS: unknown service {svc!r}; "
+                    f"valid: {sorted(valid)}"
+                )
+    try:
+        return _set_pkt_services(pkt_path, services)
+    except FileNotFoundError as e:
+        raise ToolError(f"PT_NOT_FOUND: {e}") from e
+    except (ValueError, IOError) as e:
+        raise ToolError(f"INTERNAL: {e}") from e
 
 
 @mcp.tool()
