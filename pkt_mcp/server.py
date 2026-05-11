@@ -36,6 +36,7 @@ from pkt_services import (  # noqa: E402
     set_pkt_dns_records as _set_pkt_dns_records,
     set_pkt_http_files as _set_pkt_http_files,
     set_pkt_ap_wireless as _set_pkt_ap_wireless,
+    set_pkt_dhcp_pools as _set_pkt_dhcp_pools,
     SERVICE_NAMES as _SERVICE_NAMES,
 )
 
@@ -969,6 +970,69 @@ def set_pkt_http_files(
     except FileNotFoundError as e:
         raise ToolError(f"PT_NOT_FOUND: {e}") from e
     except (ValueError, IOError) as e:
+        raise ToolError(f"INTERNAL: {e}") from e
+
+
+@mcp.tool()
+def set_pkt_dhcp_pools(
+    pkt_path: str,
+    pools: dict,
+) -> dict:
+    """Add or replace Server-PT DHCP pools (and turn DHCP on) in a saved .pkt.
+
+    PT 9 stores Server-PT DHCP per-port under
+    <DHCP_SERVERS><ASSOCIATED_PORTS><ASSOCIATED_PORT><DHCP_SERVER>. This
+    tool targets the FastEthernet0 port (Server-PT's only data port), force-
+    sets <ENABLED>1</ENABLED>, and inserts/replaces named <POOL> entries.
+
+    The headline use case is VoIP phone auto-registration: PT 9's router
+    DHCP CLI rejects `option 150 ip X.X.X.X`, so phones can't learn their
+    CME TFTP server. Server-PT's DHCP service supports the same option
+    (named TFTP_ADDRESS in the XML); setting it here makes phones auto-
+    register with CME after `File→Open` in PT.
+
+    Args:
+        pkt_path: Absolute path to existing .pkt file.
+        pools: {device_name: {pool_name: {field: value, ...}}, ...}.
+               Required fields per pool: "start_ip", "mask".
+               Optional fields with defaults:
+                 "default_router" (str, default "0.0.0.0") — gateway.
+                 "dns_server"     (str, default "0.0.0.0").
+                 "tftp_address"   (str, default "0.0.0.0") — ★ option 150.
+                                  Set to your CME router's IP for VoIP.
+                 "wlc_address"    (str, default "0.0.0.0") — option 43.
+                 "max_users"      (int, default 50). END_IP auto-computed
+                                  as start_ip + max_users − 1.
+                 "lease_time"     (int ms, default 86400000 = 24h).
+                 "domain_name"    (str, default "").
+               Pools with a name that already exists are replaced; new
+               names are appended.
+
+    Returns:
+        Same envelope shape as set_pkt_services. Per-device status is a
+        dict {pool_name: status}: "applied" / "block_missing" /
+        "device_missing".
+
+    Example — VoIP-ready DHCP for IP phones:
+        set_pkt_dhcp_pools("/tmp/voice.pkt", {"SRV-DHCP": {
+            "VoicePool": {
+                "start_ip":       "192.168.10.100",
+                "mask":           "255.255.255.0",
+                "default_router": "192.168.10.1",
+                "tftp_address":   "192.168.10.1",   # CME router
+                "max_users":      50,
+            },
+        }})
+    """
+    if not pkt_path.startswith("/"):
+        raise ToolError("BAD_ARGS: pkt_path must be absolute (start with '/')")
+    if not isinstance(pools, dict) or not pools:
+        raise ToolError("BAD_ARGS: pools must be a non-empty dict")
+    try:
+        return _set_pkt_dhcp_pools(pkt_path, pools)
+    except FileNotFoundError as e:
+        raise ToolError(f"PT_NOT_FOUND: {e}") from e
+    except (ValueError, IOError, KeyError) as e:
         raise ToolError(f"INTERNAL: {e}") from e
 
 

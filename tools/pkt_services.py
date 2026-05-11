@@ -306,6 +306,146 @@ def _patch_ap_wireless(block: str, config: Mapping[str, str | int]) -> tuple[str
     return new_block, "applied"
 
 
+# ── DHCP pools (phase 4.10) ───────────────────────────────────────────────
+#
+# Server-PT DHCP lives at:
+#   <DHCP_SERVERS><ASSOCIATED_PORTS><ASSOCIATED_PORT>
+#     <NAME>FastEthernet0</NAME>
+#     <DHCP_SERVER>
+#       <ENABLED>0|1</ENABLED>     ← service on/off here (NOT a top-level flag)
+#       <POOLS>
+#         <POOL>…fields…</POOL>
+#         <POOL>…</POOL>
+#       </POOLS>
+#       <DHCP_RESERVATIONS/>
+#       <AUTOCONFIG></AUTOCONFIG>
+#     </DHCP_SERVER>
+#   </ASSOCIATED_PORT></ASSOCIATED_PORTS></DHCP_SERVERS>
+#
+# Each <POOL> carries 13 fields (NAME, NETWORK, MASK, DEFAULT_ROUTER,
+# TFTP_ADDRESS, START_IP, END_IP, DNS_SERVER, MAX_USERS, DOMAIN_NAME,
+# DHCP_POOL_LEASES, LEASE_TIME, WLC_ADDRESS). NETWORK and END_IP are
+# auto-derived from START_IP + MASK + MAX_USERS (PT does this; we mirror).
+#
+# TFTP_ADDRESS is DHCP option 150 — the one that solves IP-phone
+# auto-registration with CME, which is the headline reason for this tool.
+
+
+import ipaddress
+
+_DHCP_POOL_DEFAULTS: dict[str, str | int] = {
+    "default_router": "0.0.0.0",
+    "tftp_address":   "0.0.0.0",
+    "dns_server":     "0.0.0.0",
+    "wlc_address":    "0.0.0.0",
+    "domain_name":    "",
+    "lease_time":     86400000,   # ms — PT's default
+    "max_users":      50,
+}
+
+
+def _derive_network(start_ip: str, mask: str) -> str:
+    """192.168.99.100 + 255.255.255.0 → 192.168.99.0."""
+    net = ipaddress.IPv4Network(f"{start_ip}/{mask}", strict=False)
+    return str(net.network_address)
+
+
+def _derive_end_ip(start_ip: str, max_users: int, mask: str) -> str:
+    """PT pattern: end = start + max_users - 1, clamped to network broadcast."""
+    net = ipaddress.IPv4Network(f"{start_ip}/{mask}", strict=False)
+    start_int = int(ipaddress.IPv4Address(start_ip))
+    end_int = start_int + max(0, int(max_users) - 1)
+    bcast_int = int(net.broadcast_address)
+    if end_int > bcast_int:
+        end_int = bcast_int
+    return str(ipaddress.IPv4Address(end_int))
+
+
+def _render_pool(name: str, cfg: Mapping[str, str | int]) -> str:
+    start_ip   = str(cfg["start_ip"])
+    mask       = str(cfg["mask"])
+    max_users  = int(cfg.get("max_users", _DHCP_POOL_DEFAULTS["max_users"]))
+    network    = _derive_network(start_ip, mask)
+    end_ip     = _derive_end_ip(start_ip, max_users, mask)
+    return (
+        "<POOL>"
+        f"<NAME>{name}</NAME>"
+        f"<NETWORK>{network}</NETWORK>"
+        f"<MASK>{mask}</MASK>"
+        f"<DEFAULT_ROUTER>{cfg.get('default_router', _DHCP_POOL_DEFAULTS['default_router'])}</DEFAULT_ROUTER>"
+        f"<TFTP_ADDRESS>{cfg.get('tftp_address', _DHCP_POOL_DEFAULTS['tftp_address'])}</TFTP_ADDRESS>"
+        f"<START_IP>{start_ip}</START_IP>"
+        f"<END_IP>{end_ip}</END_IP>"
+        f"<DNS_SERVER>{cfg.get('dns_server', _DHCP_POOL_DEFAULTS['dns_server'])}</DNS_SERVER>"
+        f"<MAX_USERS>{max_users}</MAX_USERS>"
+        f"<DOMAIN_NAME>{cfg.get('domain_name', _DHCP_POOL_DEFAULTS['domain_name'])}</DOMAIN_NAME>"
+        "<DHCP_POOL_LEASES/>"
+        f"<LEASE_TIME>{cfg.get('lease_time', _DHCP_POOL_DEFAULTS['lease_time'])}</LEASE_TIME>"
+        f"<WLC_ADDRESS>{cfg.get('wlc_address', _DHCP_POOL_DEFAULTS['wlc_address'])}</WLC_ADDRESS>"
+        "</POOL>"
+    )
+
+
+# Match the FastEthernet0 ASSOCIATED_PORT and its DHCP_SERVER inner block.
+# Captures: group(1) = pre-ENABLED slice, (2) = ENABLED value, (3) = mid,
+# group(4) = <POOLS>…</POOLS> body, (5) = tail of DHCP_SERVER.
+_DHCP_SERVER_RE = re.compile(
+    r"(<ASSOCIATED_PORT>\s*<NAME>FastEthernet0</NAME>\s*<DHCP_SERVER>\s*"
+    r"<ENABLED>)([01])(</ENABLED>\s*<POOLS>)([\s\S]*?)(</POOLS>[\s\S]*?</ASSOCIATED_PORT>)",
+    re.DOTALL,
+)
+
+# Locate a single POOL block by name within the POOLS body.
+_POOL_BY_NAME_RE = lambda name: re.compile(
+    r"<POOL>\s*<NAME>" + re.escape(name) + r"</NAME>[\s\S]*?</POOL>",
+    re.DOTALL,
+)
+
+
+def _patch_dhcp_pools(
+    block: str,
+    pools: Mapping[str, Mapping[str, str | int]],
+) -> tuple[str, dict[str, str]]:
+    """Add or replace named DHCP pools on a Server-PT, and force the DHCP
+    service ENABLED=1 (PT's GUI only flips this on per-pool add through a
+    separate click; we always enable when at least one pool is being set).
+
+    Returns (new_block, {pool_name: status}). Status values:
+        "applied"        — pool created or updated
+        "block_missing"  — device has no DHCP_SERVERS / ASSOCIATED_PORT block
+    """
+    status: dict[str, str] = {}
+    if "<DHCP_SERVERS>" not in block:
+        for name in pools:
+            status[name] = "block_missing"
+        return block, status
+
+    m = _DHCP_SERVER_RE.search(block)
+    if not m:
+        for name in pools:
+            status[name] = "block_missing"
+        return block, status
+
+    pre, _enabled, mid, pools_body, tail = m.group(1, 2, 3, 4, 5)
+
+    # Build new pools_body by replacing existing-by-name and appending new.
+    new_body = pools_body
+    for name, cfg in pools.items():
+        rendered = _render_pool(name, cfg)
+        existing = _POOL_BY_NAME_RE(name).search(new_body)
+        if existing:
+            new_body = new_body[:existing.start()] + rendered + new_body[existing.end():]
+        else:
+            # Append right before the </POOLS> close (which lives in `tail`,
+            # not new_body — so append to new_body).
+            new_body = new_body.rstrip() + rendered
+        status[name] = "applied"
+
+    rebuilt = pre + "1" + mid + new_body + tail
+    new_block = block[:m.start()] + rebuilt + block[m.end():]
+    return new_block, status
+
+
 # ── shared decrypt/encrypt skeleton ───────────────────────────────────────
 
 
@@ -463,6 +603,73 @@ def set_pkt_http_files(
         return _patch_http_files(block, files)
 
     patched, report = _patch_each_device(xml, files_by_device, patcher)
+    size = _save_pkt(patched, output_path)
+    return {"input": pkt_path, "output": output_path, "report": report, "size": size}
+
+
+def set_pkt_dhcp_pools(
+    pkt_path: str,
+    pools_by_device: Mapping[str, Mapping[str, Mapping[str, str | int]]],
+    *,
+    output_path: str | None = None,
+) -> dict:
+    """Add or replace DHCP pools on Server-PT devices, and turn DHCP on.
+
+    Server-PT DHCP is per-port (ASSOCIATED_PORT) — we target FastEthernet0
+    (Server-PT's only data port). Each pool is identified by name; an
+    existing pool with the same name is replaced wholesale, otherwise the
+    pool is appended.
+
+    The DHCP service ENABLED flag (per-port) is forced to 1 whenever this
+    tool runs against a device, so callers don't need a separate
+    set_pkt_services call.
+
+    Args:
+        pkt_path: Absolute path to existing .pkt file.
+        pools_by_device: {device_name: {pool_name: {field: value, ...}}, ...}.
+            Required pool fields: "start_ip" (str), "mask" (str).
+            Optional fields with defaults:
+                "default_router" (str, default "0.0.0.0") — gateway.
+                "dns_server"     (str, default "0.0.0.0").
+                "tftp_address"   (str, default "0.0.0.0") — **option 150,
+                                  required for IP phone auto-registration**.
+                "wlc_address"    (str, default "0.0.0.0") — option 43 for
+                                  WLAN controllers.
+                "max_users"      (int, default 50). END_IP is auto-derived
+                                  as start_ip + max_users - 1.
+                "lease_time"     (int ms, default 86400000 = 24h).
+                "domain_name"    (str, default "").
+        output_path: Defaults to overwriting pkt_path.
+
+    Returns:
+        Same envelope shape as set_pkt_services. Per-device status is a
+        dict {pool_name: status} where status is:
+        "applied" / "block_missing" / "device_missing".
+
+    Killer use case — VoIP phone auto-registration:
+        set_pkt_dhcp_pools(pkt, {"SRV-DHCP": {
+            "VoicePool": {
+                "start_ip":       "192.168.10.100",
+                "mask":           "255.255.255.0",
+                "default_router": "192.168.10.1",
+                "tftp_address":   "192.168.10.1",  # CME router IP
+                "max_users":      50,
+            },
+        }})
+        — After reopen in PT, phones DHCP-acquire IPs and the option-150
+        TFTP pointer makes them auto-register with the CME router. This is
+        the gap PT 9's router-side `option 150 ip X.X.X.X` CLI doesn't
+        cover (the parser rejects it; Server-PT DHCP is the workaround).
+    """
+    if output_path is None:
+        output_path = pkt_path
+    xml = _load_xml(pkt_path)
+
+    def patcher(block: str, pools: Mapping[str, Mapping[str, str | int]]
+                ) -> tuple[str, dict[str, str]]:
+        return _patch_dhcp_pools(block, pools)
+
+    patched, report = _patch_each_device(xml, pools_by_device, patcher)
     size = _save_pkt(patched, output_path)
     return {"input": pkt_path, "output": output_path, "report": report, "size": size}
 

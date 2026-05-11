@@ -268,11 +268,22 @@ on the canvas directly. Out of scope for phase 4.7.
       WEP / WPA-PSK / WPA2-Enterprise have code points but aren't wired
       yet — capture them on demand and add to `_WIRELESS_AUTH_CODES`
       (phase 4.9).
+    * `set_pkt_dhcp_pools(pkt, {dev: {pool_name: {start_ip, mask, …}}})`
+      — adds or replaces DHCP pools on FastEthernet0 of a Server-PT and
+      force-enables the DHCP service (`<ENABLED>1</ENABLED>` on the
+      per-port `<DHCP_SERVER>`). Optional fields: `default_router`,
+      `dns_server`, `tftp_address` (= **DHCP option 150 — the field that
+      solves IP-phone auto-registration with CME**), `wlc_address`,
+      `max_users` (default 50), `lease_time` (ms, default 86400000),
+      `domain_name`. NETWORK and END_IP are auto-derived from `start_ip`
+      + `mask` + `max_users` so callers don't have to compute them.
+      Solves PT 9's router DHCP CLI rejecting `option 150 ip X.X.X.X`
+      (phase 4.10).
   Workflow for any of these: `save_pkt → set_pkt_* → File→Open in PT`.
-  Open service contents NOT yet patchable: DHCP server pools on Server-PT,
-  POP3/SMTP mailbox accounts, RADIUS users + NAS clients, TFTP file
-  content. Probe schemas via diff and extend `tools/pkt_services.py`
-  when needed.
+  Service contents NOT yet patchable: POP3/SMTP mailbox accounts, RADIUS
+  users + NAS clients, TFTP file content, HTTP new-file creation (needs
+  FILE_NUMBER / FILE_COUNTER bookkeeping). Probe schemas via diff and
+  extend `tools/pkt_services.py` when needed.
 
 ### Things PT 9.0.0 DOES support (corrections to prior verdicts)
 - **CME is present, on the right router model.** Use `2811` (the
