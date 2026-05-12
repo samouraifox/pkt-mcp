@@ -245,7 +245,7 @@ on the canvas directly. Out of scope for phase 4.7.
   session via the JS bridge. **BUT** the saved .pkt file carries every
   state value as XML, and PT 9 uses the same Twofish-EAX + obfuscation
   pipeline as prior versions (cracked & vendored under `tools/unpacket/`,
-  MIT — Punkcake21/Unpacket). Four MCP tools cover the file-patch path:
+  MIT — Punkcake21/Unpacket). Six MCP tools cover the file-patch path:
     * `set_pkt_services(pkt, {dev: {svc: bool}})` — HTTP/HTTPS/DNS/TFTP/
       NTP/FTP/SYSLOG/AAA/SMTP/POP3/NETFLOW on/off (phase 4.8).
     * `set_pkt_dns_records(pkt, {dev: {hostname: ip}})` — replaces the
@@ -279,6 +279,23 @@ on the canvas directly. Out of scope for phase 4.7.
       + `mask` + `max_users` so callers don't have to compute them.
       Solves PT 9's router DHCP CLI rejecting `option 150 ip X.X.X.X`
       (phase 4.10).
+    * `set_pkt_zones(pkt, [{kind, x, y, w, h, fill_color, outline_color,
+      label}, ...])` — adds visual zones (colored rectangles, ellipses,
+      labels) to the canvas. Three shape kinds: `rect_outline` (Image 1
+      style — black-bordered box around a sub-group), `rect_filled` (Image
+      2 style — solid-color background for a whole site), `ellipse_filled`
+      (Image 3 style — oval for VLAN clusters), plus `note` for bare text.
+      Each rect/ellipse with a `label` field auto-emits a paired NOTE near
+      its top-left. RECTANGLES and ELLIPSES live at the workspace root
+      (siblings of `<CLUSTERS>`); NOTES live inside `<PHYSICALWORKSPACE>`.
+      Shape XML schema: `<TopLeftX/Y>`+`<BottomRightX/Y>` for geometry,
+      `<Color><Red/Green/Blue/>` for fill, `<Filled OUTLINECOLOR="#hex"
+      OUTLINED="true">0|1</Filled>` for outline + fill flag, RECTCLUSTERID
+      / ELLIPSECLUSTERID="1-1" pinning to root cluster. `MEM_ADDR=0` works
+      — PT 9 re-assigns pointers on load. `clear_existing=True` wipes
+      pre-existing shapes/notes before inserting. JS bridge route was
+      explored but `addCluster`/`drawCircle`/`drawLine` crashed PT 9.0.0
+      on bad args (phase 4.11) — file-patch is the safer path.
   Workflow for any of these: `save_pkt → set_pkt_* → File→Open in PT`.
   Service contents NOT yet patchable: POP3/SMTP mailbox accounts, RADIUS
   users + NAS clients, TFTP file content, HTTP new-file creation (needs

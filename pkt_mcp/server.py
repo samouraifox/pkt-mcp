@@ -39,6 +39,7 @@ from pkt_services import (  # noqa: E402
     set_pkt_dhcp_pools as _set_pkt_dhcp_pools,
     SERVICE_NAMES as _SERVICE_NAMES,
 )
+from pkt_zones import set_pkt_zones as _set_pkt_zones, ZONE_KINDS as _ZONE_KINDS  # noqa: E402
 
 mcp = FastMCP("pkt-mcp")
 
@@ -1082,6 +1083,94 @@ def set_pkt_ap_wireless(
         raise ToolError(f"PT_NOT_FOUND: {e}") from e
     except (ValueError, IOError) as e:
         raise ToolError(f"INTERNAL: {e}") from e
+
+
+@mcp.tool()
+def set_pkt_zones(
+    pkt_path: str,
+    zones: list,
+    clear_existing: bool = False,
+) -> dict:
+    """Add visual zones (colored boxes, ellipses, labels) to a saved .pkt file.
+
+    Use this to visually group devices into named "islands" — e.g. one
+    pink rectangle around the HQ site, one green ellipse around the DC,
+    one outlined rectangle around the Internet edge. Matches the visual
+    style of well-presented portfolio Packet Tracer files (colored zones
+    with text labels). PT's GUI drawing tools are not reachable from the
+    JS bridge in a crash-safe way (verified May 2026 phase 4.11) — this
+    is the file-patch alternative.
+
+    Args:
+        pkt_path: Absolute path to existing .pkt file.
+        zones:    List of zone specs. Each spec is a dict with required
+                  `kind` field, one of:
+
+            "rect_outline"   — outlined rectangle, NO fill (Image-1 style).
+                              Required: x, y, w, h (ints, canvas units).
+                              Optional: outline_color="#000000",
+                                        outlined=True, label="..."
+
+            "rect_filled"    — filled rectangle with optional outline
+                              (Image-2 style — best for whole-site zones).
+                              Required: x, y, w, h.
+                              Optional: fill_color="#RRGGBB" (default blue),
+                                        outline_color="#000000",
+                                        outlined=True, label="..."
+
+            "ellipse_filled" — filled ellipse / oval (Image-3 style — best
+                              for sub-groups like VLAN-X within a site).
+                              Required + optional: same as rect_filled.
+
+            "note"           — bare text label, no shape.
+                              Required: x, y, text.
+
+            Any rect/ellipse with a `label` field also emits a NOTE near
+            its top-left corner (override with label_x, label_y).
+
+        clear_existing: If True, wipe any pre-existing zones/labels
+                       before inserting. If False (default), append to
+                       what's already there.
+
+    Returns:
+        {"input", "output", "size", "report": {"rectangles_added": N,
+         "ellipses_added": M, "notes_added": K}}.
+
+    Color tips:
+        - PT canvas defaults to a light background; pastel fills read best
+          (pink #FFC0CB, light green #90EE90, light blue #ADD8E6,
+           pale yellow #FFFFE0, lavender #E6E6FA).
+        - Use spacing of at least 200 canvas units between site zones so
+          the islands look distinct.
+        - Outline color "#000000" (black) for image-1 style;
+          can match fill for image-2 style if you want a flat look.
+
+    Example — three-site visual layout:
+        set_pkt_zones("/path/portfolio.pkt", [
+            {"kind": "rect_filled", "x": 1100, "y": 380,
+             "w": 800, "h": 620, "fill_color": "#FFC0CB",
+             "outline_color": "#FFC0CB", "label": "HQ Centrála"},
+            {"kind": "rect_filled", "x": 100, "y": 380,
+             "w": 800, "h": 400, "fill_color": "#90EE90",
+             "outline_color": "#90EE90", "label": "DC Vienna"},
+            {"kind": "rect_outline", "x": 200, "y": 50,
+             "w": 1600, "h": 230, "outline_color": "#000000",
+             "label": "Internet edge"},
+            {"kind": "ellipse_filled", "x": 1200, "y": 700,
+             "w": 600, "h": 200, "fill_color": "#ADD8E6",
+             "label": "VLAN 110 — Voice"},
+        ])
+    """
+    if not pkt_path.startswith("/"):
+        raise ToolError("BAD_ARGS: pkt_path must be absolute (start with '/')")
+    if not isinstance(zones, list) or not zones:
+        raise ToolError("BAD_ARGS: zones must be a non-empty list")
+    try:
+        return _set_pkt_zones(pkt_path, zones, clear_existing=clear_existing)
+    except FileNotFoundError as e:
+        raise ToolError(f"PT_NOT_FOUND: {e}") from e
+    except (ValueError, IOError, KeyError) as e:
+        raise ToolError(f"BAD_ARGS: {e}") from e
 
 
 @mcp.tool()
