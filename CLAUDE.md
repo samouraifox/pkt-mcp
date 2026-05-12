@@ -366,6 +366,136 @@ api.js edits land via `bridge.reload_api()` — no GUI step. Only main.js
 edits need the manual Stop/Edit/Save/Start cycle in Extensions →
 Scripting → Configure. See "Dev workflow" section above.
 
+## Module integration (phase 5.1, May 2026)
+
+Two MCP tools expose PT's hardware-assembly API, closing the "serial WAN
+won't work because the router has no WIC" and "wireless host won't work
+because the PC has no NIC" gaps that NovaCore 2.0 hit:
+
+- `add_module(device, module_model, slot=None, container="chassis",
+  replace_existing=False)` — install a module, returns the new port
+  names PT exposes after install.
+- `power_device(device, on)` — chassis-level setPower(bool) for HA
+  failover / power-cycle demos.
+
+Full JS-surface map: `docs/phase5.1-module-api.md`. Module catalog has
+199 entries spread across the ModuleType int enum (table in M1).
+
+### Container picking — which one to use
+
+`container="chassis"` (the default) is `root.getModuleAt(0)`. This is
+where WIC / HWIC / NIM slots live on **routers** and where the power
+adapter slot lives on the **7960 IP phone**. Use this for serial
+modules and phone power.
+
+`container="root"` is the device's root Module directly. This is where
+the wireless NIC slot lives on **PC / Laptop / Server** (always slot
+0). Use this for wireless cards.
+
+Mnemonic: routers and phones have a chassis tree (`root → chassis →
+WIC/power`); hosts have a flat wireless slot (`root → NIC`). PT mirrors
+the real Cisco physical layout.
+
+### Confirmed (device, module, container, slot) triples
+
+| Device | Module | Container | Slot | New ports | Notes |
+|---|---|---|---|---|---|
+| `2811` | `WIC-1T` | `chassis` | 0 | `Serial0/0/0` | Add per slot for more |
+| `2811` | `WIC-2T` | `chassis` | 0 | `Serial0/0/0`, `Serial0/0/1` | |
+| `2911` | `HWIC-2T` | `chassis` | 0 | `Serial0/0/0`, `Serial0/0/1` | 2911 is HWIC-only |
+| `1841` | `WIC-1T` / `WIC-2T` | `chassis` | 0 or 1 | `Serial0/0/0` etc | 1841 has 2 WIC slots |
+| `ISR4321` | `NIM-2T` | `chassis` | 1 | `Serial0/1/0`, `Serial0/1/1` | Slot 0 is BUILTIN |
+| `PC-PT` | `Linksys-WMP300N` | `root` | 0 | `Wireless0` | **Needs `replace_existing=True`** — default cover ships in slot 0 |
+| `Laptop-PT` | `Linksys-WPC300N` | `root` | 0 | `Wireless0` | Same — replace placeholder |
+| `7960` | `IP_PHONE_POWER_ADAPTER` | `chassis` | 0 | *(none)* | No new port — module powers the voice stack so CME registration works |
+
+### Workflow — adding serial WAN between two routers
+
+```python
+# Both ends.
+add_device(type="ROUTER", name="R1", model="2811", x=100, y=100)
+add_device(type="ROUTER", name="R2", model="2811", x=300, y=100)
+add_module(device="R1", module_model="WIC-1T")     # → Serial0/0/0 on R1
+add_module(device="R2", module_model="WIC-1T")     # → Serial0/0/0 on R2
+
+# Cable. SERIAL is now a real option, not just an enum string.
+connect(dev_a="R1", port_a="Serial0/0/0",
+        dev_b="R2", port_b="Serial0/0/0",
+        cable_type="SERIAL")
+
+# IOS: the DCE side (PT picks one when cable_type=SERIAL) needs a clock
+# rate. Find which end is DCE via `show controllers serial 0/0/0` and
+# look for "DCE V.35" / "DTE V.35". Set the clock on DCE only:
+run_commands("R1", [
+    "enable", "configure terminal",
+    "interface Serial0/0/0",
+    "clock rate 64000",          # only on the DCE side
+    "ip address 10.0.0.1 255.255.255.252",
+    "no shutdown", "end",
+])
+run_commands("R2", [
+    "enable", "configure terminal",
+    "interface Serial0/0/0",
+    "ip address 10.0.0.2 255.255.255.252",
+    "no shutdown", "end",
+])
+```
+
+### Workflow — wireless PC ↔ AP
+
+```python
+add_device(type="ACCESS_POINT", name="AP1", model="AccessPoint-PT", x=100, y=100)
+add_device(type="PC",           name="PC1", model="PC-PT",          x=300, y=100)
+
+# PC ships with a default PT-HOST-NM-COVER in root slot 0. Must displace
+# it — the auto-pick path won't, since it only fills empty slots.
+add_module(device="PC1", module_model="Linksys-WMP300N",
+           container="root", slot=0, replace_existing=True)
+
+# After install: PC1 has `Wireless0`. SSID config on the AP side is via
+# set_pkt_ap_wireless (file-patcher), not at runtime. PC's wireless
+# association is GUI-only in PT 9 — there's no programmatic equivalent.
+```
+
+### Workflow — IP phone registers with CME
+
+```python
+add_device(type="ROUTER",    name="R-CME",  model="2811",         x=100, y=100)
+add_device(type="SWITCH",    name="SW1",    model="2960-24TT",    x=300, y=100)
+add_device(type="IP_PHONE",  name="PHONE1", model="7960",          x=500, y=100)
+
+# THE missing step from NovaCore 2.0: install the phone's power adapter.
+# Without this, the phone places + cables but never registers with CME.
+add_module(device="PHONE1", module_model="IP_PHONE_POWER_ADAPTER")
+
+# Cable: phone Switch port → switch access port → CME router.
+connect("PHONE1", "Switch", "SW1", "FastEthernet0/1", "ETHERNET_STRAIGHT")
+connect("SW1",    "GigabitEthernet0/1", "R-CME", "GigabitEthernet0/0", "ETHERNET_STRAIGHT")
+
+# Configure CME on R-CME, voice VLAN + DHCP option 150 on SW1 (the rest
+# is regular IOS).
+```
+
+### Gotchas
+
+- **Default placeholders.** PC, Laptop, Server, AP, DSL/Cable modem all
+  ship with a default module already in their root slot 0 (`PT-HOST-NM-
+  COVER` family). Installing a real NIC there needs `replace_existing=
+  True`. Routers and the 7960 phone do NOT have placeholders in the
+  slots you care about — the auto-pick path works directly.
+- **AP power adapter is orphaned.** `ACCESS_POINT_POWER_ADAPTER` exists
+  in the catalog (ModuleType 31) but the AP variants probed in phase 5.1
+  expose no type-31 slot to install it into. Use `power_device(AP, on=
+  False/True)` for AP power state instead — same effect.
+- **Built-in modules are read-only.** ISR4321/4331 ship with
+  `ISR4321-BUILTIN` in chassis slot 0. Don't try to displace it — it's
+  the device's primary interface group. NIM-2T goes in slot 1.
+- **Module install adds the port immediately.** No polling needed —
+  `connect(..., port_a="Serial0/0/0", ...)` works on the very next call.
+- **The `% NOTE:` IOS markers don't apply here.** `add_module` doesn't
+  invoke IOS — it's a JS-side workspace mutation. Failures are
+  `PT_REJECTED` with structured error_data (occupant / slot_type).
+
 ## Naming conventions
 
 - Routers: `R1`, `R2`, `R3` (number from the topology diagram or

@@ -1,0 +1,2280 @@
+{
+  "timestamp": "2026-05-12T13:12:03.570Z",
+  "hardware_factory": {
+    "exists": true,
+    "methods": [
+      "constructor",
+      "devices",
+      "getClassName",
+      "getObjectUuid",
+      "modules",
+      "registerDelegate",
+      "registerEvent",
+      "registerObjectEvent",
+      "unregisterDelegate",
+      "unregisterEvent",
+      "unregisterObjectEvent"
+    ]
+  },
+  "module_factory": {
+    "methods": [
+      "addModuleModel",
+      "constructor",
+      "getAvailableModuleAt",
+      "getAvailableModuleCount",
+      "getAvailableModuleForTypeAt",
+      "getAvailableModuleForTypeCount",
+      "getClassName",
+      "getDescriptor",
+      "getObjectUuid",
+      "registerDelegate",
+      "registerEvent",
+      "registerObjectEvent",
+      "unregisterDelegate",
+      "unregisterEvent",
+      "unregisterObjectEvent"
+    ],
+    "available_count": 199
+  },
+  "module_catalog": [
+    {
+      "idx": 0,
+      "type": 1,
+      "model": "NM-1E",
+      "slot_count": 0
+    },
+    {
+      "idx": 1,
+      "type": 1,
+      "model": "NM-1E2W",
+      "slot_count": 2,
+      "slot_types": [
+        2,
+        2
+      ]
+    },
+    {
+      "idx": 2,
+      "type": 1,
+      "model": "NM-1FE-FX",
+      "slot_count": 0
+    },
+    {
+      "idx": 3,
+      "type": 1,
+      "model": "NM-1FE-TX",
+      "slot_count": 0
+    },
+    {
+      "idx": 4,
+      "type": 1,
+      "model": "NM-1FE2W",
+      "slot_count": 2,
+      "slot_types": [
+        2,
+        2
+      ]
+    },
+    {
+      "idx": 5,
+      "type": 1,
+      "model": "NM-2E2W",
+      "slot_count": 2,
+      "slot_types": [
+        2,
+        2
+      ]
+    },
+    {
+      "idx": 6,
+      "type": 1,
+      "model": "NM-2FE2W",
+      "slot_count": 2,
+      "slot_types": [
+        2,
+        2
+      ]
+    },
+    {
+      "idx": 7,
+      "type": 1,
+      "model": "NM-2W",
+      "slot_count": 2,
+      "slot_types": [
+        2,
+        2
+      ]
+    },
+    {
+      "idx": 8,
+      "type": 1,
+      "model": "NM-4A/S",
+      "slot_count": 0
+    },
+    {
+      "idx": 9,
+      "type": 1,
+      "model": "NM-4E",
+      "slot_count": 0
+    },
+    {
+      "idx": 10,
+      "type": 1,
+      "model": "NM-8A/S",
+      "slot_count": 0
+    },
+    {
+      "idx": 11,
+      "type": 1,
+      "model": "NM-8AM",
+      "slot_count": 0
+    },
+    {
+      "idx": 12,
+      "type": 1,
+      "model": "NM-Cover",
+      "slot_count": 0
+    },
+    {
+      "idx": 13,
+      "type": 1,
+      "model": "NM-ESW-161",
+      "slot_count": 0
+    },
+    {
+      "idx": 14,
+      "type": 2,
+      "model": "1240-Cellular",
+      "slot_count": 0
+    },
+    {
+      "idx": 15,
+      "type": 2,
+      "model": "1240-Cover",
+      "slot_count": 0
+    },
+    {
+      "idx": 16,
+      "type": 2,
+      "model": "HWIC-1GE-SFP",
+      "slot_count": 1,
+      "slot_types": [
+        30
+      ]
+    },
+    {
+      "idx": 17,
+      "type": 2,
+      "model": "HWIC-2T",
+      "slot_count": 0
+    },
+    {
+      "idx": 18,
+      "type": 2,
+      "model": "HWIC-4ESW",
+      "slot_count": 0
+    },
+    {
+      "idx": 19,
+      "type": 2,
+      "model": "HWIC-8A",
+      "slot_count": 0
+    },
+    {
+      "idx": 20,
+      "type": 2,
+      "model": "HWIC-AP-AG-B",
+      "slot_count": 0
+    },
+    {
+      "idx": 21,
+      "type": 2,
+      "model": "NIM-2T",
+      "slot_count": 0
+    },
+    {
+      "idx": 22,
+      "type": 2,
+      "model": "NIM-Cover",
+      "slot_count": 0
+    },
+    {
+      "idx": 23,
+      "type": 2,
+      "model": "NIM-ES2-4",
+      "slot_count": 0
+    },
+    {
+      "idx": 24,
+      "type": 2,
+      "model": "WIC-1AM",
+      "slot_count": 0
+    },
+    {
+      "idx": 25,
+      "type": 2,
+      "model": "WIC-1ENET",
+      "slot_count": 0
+    },
+    {
+      "idx": 26,
+      "type": 2,
+      "model": "WIC-1T",
+      "slot_count": 0
+    },
+    {
+      "idx": 27,
+      "type": 2,
+      "model": "WIC-2AM",
+      "slot_count": 0
+    },
+    {
+      "idx": 28,
+      "type": 2,
+      "model": "WIC-2T",
+      "slot_count": 0
+    },
+    {
+      "idx": 29,
+      "type": 2,
+      "model": "WIC-Cover",
+      "slot_count": 0
+    },
+    {
+      "idx": 30,
+      "type": 3,
+      "model": "P-5GS6-GL",
+      "slot_count": 0
+    },
+    {
+      "idx": 31,
+      "type": 3,
+      "model": "P-LTEA18-GL",
+      "slot_count": 0
+    },
+    {
+      "idx": 32,
+      "type": 3,
+      "model": "PT-ROUTER-NM-1AM",
+      "slot_count": 0
+    },
+    {
+      "idx": 33,
+      "type": 3,
+      "model": "PT-ROUTER-NM-1CE",
+      "slot_count": 0
+    },
+    {
+      "idx": 34,
+      "type": 3,
+      "model": "PT-ROUTER-NM-1CFE",
+      "slot_count": 0
+    },
+    {
+      "idx": 35,
+      "type": 3,
+      "model": "PT-ROUTER-NM-1CGE",
+      "slot_count": 0
+    },
+    {
+      "idx": 36,
+      "type": 3,
+      "model": "PT-ROUTER-NM-1FFE",
+      "slot_count": 0
+    },
+    {
+      "idx": 37,
+      "type": 3,
+      "model": "PT-ROUTER-NM-1FFE-SM",
+      "slot_count": 0
+    },
+    {
+      "idx": 38,
+      "type": 3,
+      "model": "PT-ROUTER-NM-1FGE",
+      "slot_count": 0
+    },
+    {
+      "idx": 39,
+      "type": 3,
+      "model": "PT-ROUTER-NM-1FGE-SM",
+      "slot_count": 0
+    },
+    {
+      "idx": 40,
+      "type": 3,
+      "model": "PT-ROUTER-NM-1S",
+      "slot_count": 0
+    },
+    {
+      "idx": 41,
+      "type": 3,
+      "model": "PT-ROUTER-NM-1SS",
+      "slot_count": 0
+    },
+    {
+      "idx": 42,
+      "type": 3,
+      "model": "PT-ROUTER-NM-COVER",
+      "slot_count": 0
+    },
+    {
+      "idx": 43,
+      "type": 4,
+      "model": "9320-AC-POWER-SUPPLY",
+      "slot_count": 0
+    },
+    {
+      "idx": 44,
+      "type": 4,
+      "model": "AC-POWER-SUPPLY",
+      "slot_count": 0
+    },
+    {
+      "idx": 45,
+      "type": 4,
+      "model": "POWER-COVER-PLATE",
+      "slot_count": 0
+    },
+    {
+      "idx": 46,
+      "type": 4,
+      "model": "PT-SWITCH-NM-1CE",
+      "slot_count": 0
+    },
+    {
+      "idx": 47,
+      "type": 4,
+      "model": "PT-SWITCH-NM-1CFE",
+      "slot_count": 0
+    },
+    {
+      "idx": 48,
+      "type": 4,
+      "model": "PT-SWITCH-NM-1CGE",
+      "slot_count": 0
+    },
+    {
+      "idx": 49,
+      "type": 4,
+      "model": "PT-SWITCH-NM-1FFE",
+      "slot_count": 0
+    },
+    {
+      "idx": 50,
+      "type": 4,
+      "model": "PT-SWITCH-NM-1FFE-SM",
+      "slot_count": 0
+    },
+    {
+      "idx": 51,
+      "type": 4,
+      "model": "PT-SWITCH-NM-1FGE",
+      "slot_count": 0
+    },
+    {
+      "idx": 52,
+      "type": 4,
+      "model": "PT-SWITCH-NM-1FGE-SM",
+      "slot_count": 0
+    },
+    {
+      "idx": 53,
+      "type": 4,
+      "model": "PT-SWITCH-NM-COVER",
+      "slot_count": 0
+    },
+    {
+      "idx": 54,
+      "type": 5,
+      "model": "PT-CLOUD-NM-1AM",
+      "slot_count": 0
+    },
+    {
+      "idx": 55,
+      "type": 5,
+      "model": "PT-CLOUD-NM-1CE",
+      "slot_count": 0
+    },
+    {
+      "idx": 56,
+      "type": 5,
+      "model": "PT-CLOUD-NM-1CFE",
+      "slot_count": 0
+    },
+    {
+      "idx": 57,
+      "type": 5,
+      "model": "PT-CLOUD-NM-1CGE",
+      "slot_count": 0
+    },
+    {
+      "idx": 58,
+      "type": 5,
+      "model": "PT-CLOUD-NM-1CX",
+      "slot_count": 0
+    },
+    {
+      "idx": 59,
+      "type": 5,
+      "model": "PT-CLOUD-NM-1FFE",
+      "slot_count": 0
+    },
+    {
+      "idx": 60,
+      "type": 5,
+      "model": "PT-CLOUD-NM-1FFE-SM",
+      "slot_count": 0
+    },
+    {
+      "idx": 61,
+      "type": 5,
+      "model": "PT-CLOUD-NM-1FGE",
+      "slot_count": 0
+    },
+    {
+      "idx": 62,
+      "type": 5,
+      "model": "PT-CLOUD-NM-1FGE-SM",
+      "slot_count": 0
+    },
+    {
+      "idx": 63,
+      "type": 5,
+      "model": "PT-CLOUD-NM-1S",
+      "slot_count": 0
+    },
+    {
+      "idx": 64,
+      "type": 6,
+      "model": "PT-REPEATER-NM-1CE",
+      "slot_count": 0
+    },
+    {
+      "idx": 65,
+      "type": 6,
+      "model": "PT-REPEATER-NM-1CFE",
+      "slot_count": 0
+    },
+    {
+      "idx": 66,
+      "type": 6,
+      "model": "PT-REPEATER-NM-1CGE",
+      "slot_count": 0
+    },
+    {
+      "idx": 67,
+      "type": 6,
+      "model": "PT-REPEATER-NM-1FFE",
+      "slot_count": 0
+    },
+    {
+      "idx": 68,
+      "type": 6,
+      "model": "PT-REPEATER-NM-1FFE-SM",
+      "slot_count": 0
+    },
+    {
+      "idx": 69,
+      "type": 6,
+      "model": "PT-REPEATER-NM-1FGE",
+      "slot_count": 0
+    },
+    {
+      "idx": 70,
+      "type": 6,
+      "model": "PT-REPEATER-NM-1FGE-SM",
+      "slot_count": 0
+    },
+    {
+      "idx": 71,
+      "type": 6,
+      "model": "PT-REPEATER-NM-COVER",
+      "slot_count": 0
+    },
+    {
+      "idx": 72,
+      "type": 7,
+      "model": "Linksys-WMP300N",
+      "slot_count": 0
+    },
+    {
+      "idx": 73,
+      "type": 7,
+      "model": "PT-HOST-NM-1AM",
+      "slot_count": 0
+    },
+    {
+      "idx": 74,
+      "type": 7,
+      "model": "PT-HOST-NM-1CE",
+      "slot_count": 0
+    },
+    {
+      "idx": 75,
+      "type": 7,
+      "model": "PT-HOST-NM-1CFE",
+      "slot_count": 0
+    },
+    {
+      "idx": 76,
+      "type": 7,
+      "model": "PT-HOST-NM-1CGE",
+      "slot_count": 0
+    },
+    {
+      "idx": 77,
+      "type": 7,
+      "model": "PT-HOST-NM-1FFE",
+      "slot_count": 0
+    },
+    {
+      "idx": 78,
+      "type": 7,
+      "model": "PT-HOST-NM-1FFE-SM",
+      "slot_count": 0
+    },
+    {
+      "idx": 79,
+      "type": 7,
+      "model": "PT-HOST-NM-1FGE",
+      "slot_count": 0
+    },
+    {
+      "idx": 80,
+      "type": 7,
+      "model": "PT-HOST-NM-1FGE-SM",
+      "slot_count": 0
+    },
+    {
+      "idx": 81,
+      "type": 7,
+      "model": "PT-HOST-NM-1W",
+      "slot_count": 0
+    },
+    {
+      "idx": 82,
+      "type": 7,
+      "model": "PT-HOST-NM-1W-A",
+      "slot_count": 0
+    },
+    {
+      "idx": 83,
+      "type": 7,
+      "model": "PT-HOST-NM-1W-AC",
+      "slot_count": 0
+    },
+    {
+      "idx": 84,
+      "type": 7,
+      "model": "PT-HOST-NM-3G/4G",
+      "slot_count": 0
+    },
+    {
+      "idx": 85,
+      "type": 7,
+      "model": "PT-HOST-NM-5G",
+      "slot_count": 0
+    },
+    {
+      "idx": 86,
+      "type": 7,
+      "model": "PT-HOST-NM-COVER",
+      "slot_count": 0
+    },
+    {
+      "idx": 87,
+      "type": 8,
+      "model": "PT-MODEM-NM-1CE",
+      "slot_count": 0
+    },
+    {
+      "idx": 88,
+      "type": 8,
+      "model": "PT-MODEM-NM-1CFE",
+      "slot_count": 0
+    },
+    {
+      "idx": 89,
+      "type": 8,
+      "model": "PT-MODEM-NM-1CGE",
+      "slot_count": 0
+    },
+    {
+      "idx": 90,
+      "type": 9,
+      "model": "Linksys-WPC300N",
+      "slot_count": 0
+    },
+    {
+      "idx": 91,
+      "type": 9,
+      "model": "PT-LAPTOP-NM-1AM",
+      "slot_count": 0
+    },
+    {
+      "idx": 92,
+      "type": 9,
+      "model": "PT-LAPTOP-NM-1CE",
+      "slot_count": 0
+    },
+    {
+      "idx": 93,
+      "type": 9,
+      "model": "PT-LAPTOP-NM-1CFE",
+      "slot_count": 0
+    },
+    {
+      "idx": 94,
+      "type": 9,
+      "model": "PT-LAPTOP-NM-1CGE",
+      "slot_count": 0
+    },
+    {
+      "idx": 95,
+      "type": 9,
+      "model": "PT-LAPTOP-NM-1FFE",
+      "slot_count": 0
+    },
+    {
+      "idx": 96,
+      "type": 9,
+      "model": "PT-LAPTOP-NM-1FFE-SM",
+      "slot_count": 0
+    },
+    {
+      "idx": 97,
+      "type": 9,
+      "model": "PT-LAPTOP-NM-1FGE",
+      "slot_count": 0
+    },
+    {
+      "idx": 98,
+      "type": 9,
+      "model": "PT-LAPTOP-NM-1FGE-SM",
+      "slot_count": 0
+    },
+    {
+      "idx": 99,
+      "type": 9,
+      "model": "PT-LAPTOP-NM-1W",
+      "slot_count": 0
+    },
+    {
+      "idx": 100,
+      "type": 9,
+      "model": "PT-LAPTOP-NM-1W-A",
+      "slot_count": 0
+    },
+    {
+      "idx": 101,
+      "type": 9,
+      "model": "PT-LAPTOP-NM-1W-AC",
+      "slot_count": 0
+    },
+    {
+      "idx": 102,
+      "type": 9,
+      "model": "PT-LAPTOP-NM-3G/4G",
+      "slot_count": 0
+    },
+    {
+      "idx": 103,
+      "type": 9,
+      "model": "PT-LAPTOP-NM-5G",
+      "slot_count": 0
+    },
+    {
+      "idx": 104,
+      "type": 10,
+      "model": "PT-CLOUD-NM-1CX",
+      "slot_count": 0
+    },
+    {
+      "idx": 105,
+      "type": 11,
+      "model": "IP_PHONE_POWER_ADAPTER",
+      "slot_count": 0
+    },
+    {
+      "idx": 106,
+      "type": 12,
+      "model": "Linksys-WPC300N",
+      "slot_count": 0
+    },
+    {
+      "idx": 107,
+      "type": 12,
+      "model": "PT-TABLETPC-NM-1AM",
+      "slot_count": 0
+    },
+    {
+      "idx": 108,
+      "type": 12,
+      "model": "PT-TABLETPC-NM-1CE",
+      "slot_count": 0
+    },
+    {
+      "idx": 109,
+      "type": 12,
+      "model": "PT-TABLETPC-NM-1CFE",
+      "slot_count": 0
+    },
+    {
+      "idx": 110,
+      "type": 12,
+      "model": "PT-TABLETPC-NM-1CGE",
+      "slot_count": 0
+    },
+    {
+      "idx": 111,
+      "type": 12,
+      "model": "PT-TABLETPC-NM-1FFE-SM",
+      "slot_count": 0
+    },
+    {
+      "idx": 112,
+      "type": 12,
+      "model": "PT-TABLETPC-NM-1FGE-SM",
+      "slot_count": 0
+    },
+    {
+      "idx": 113,
+      "type": 12,
+      "model": "PT-TABLETPC-NM-1W",
+      "slot_count": 0
+    },
+    {
+      "idx": 114,
+      "type": 12,
+      "model": "PT-TABLETPC-NM-1W-A",
+      "slot_count": 0
+    },
+    {
+      "idx": 115,
+      "type": 12,
+      "model": "PT-TABLETPC-NM-1W-AC",
+      "slot_count": 0
+    },
+    {
+      "idx": 116,
+      "type": 12,
+      "model": "PT-TABLETPC-NM-3G",
+      "slot_count": 0
+    },
+    {
+      "idx": 117,
+      "type": 13,
+      "model": "Linksys-WPC300N",
+      "slot_count": 0
+    },
+    {
+      "idx": 118,
+      "type": 13,
+      "model": "PT-PDA-NM-1AM",
+      "slot_count": 0
+    },
+    {
+      "idx": 119,
+      "type": 13,
+      "model": "PT-PDA-NM-1CE",
+      "slot_count": 0
+    },
+    {
+      "idx": 120,
+      "type": 13,
+      "model": "PT-PDA-NM-1CFE",
+      "slot_count": 0
+    },
+    {
+      "idx": 121,
+      "type": 13,
+      "model": "PT-PDA-NM-1CGE",
+      "slot_count": 0
+    },
+    {
+      "idx": 122,
+      "type": 13,
+      "model": "PT-PDA-NM-1FFE",
+      "slot_count": 0
+    },
+    {
+      "idx": 123,
+      "type": 13,
+      "model": "PT-PDA-NM-1FFE-SM",
+      "slot_count": 0
+    },
+    {
+      "idx": 124,
+      "type": 13,
+      "model": "PT-PDA-NM-1FGE",
+      "slot_count": 0
+    },
+    {
+      "idx": 125,
+      "type": 13,
+      "model": "PT-PDA-NM-1FGE-SM",
+      "slot_count": 0
+    },
+    {
+      "idx": 126,
+      "type": 13,
+      "model": "PT-PDA-NM-1W",
+      "slot_count": 0
+    },
+    {
+      "idx": 127,
+      "type": 13,
+      "model": "PT-PDA-NM-1W-A",
+      "slot_count": 0
+    },
+    {
+      "idx": 128,
+      "type": 13,
+      "model": "PT-PDA-NM-1W-AC",
+      "slot_count": 0
+    },
+    {
+      "idx": 129,
+      "type": 13,
+      "model": "PT-PDA-NM-3G/4G",
+      "slot_count": 0
+    },
+    {
+      "idx": 130,
+      "type": 14,
+      "model": "Linksys-WPC300N",
+      "slot_count": 0
+    },
+    {
+      "idx": 131,
+      "type": 14,
+      "model": "PT-WIRELESSENDDEVICE-NM-1AM",
+      "slot_count": 0
+    },
+    {
+      "idx": 132,
+      "type": 14,
+      "model": "PT-WIRELESSENDDEVICE-NM-1CE",
+      "slot_count": 0
+    },
+    {
+      "idx": 133,
+      "type": 14,
+      "model": "PT-WIRELESSENDDEVICE-NM-1CFE",
+      "slot_count": 0
+    },
+    {
+      "idx": 134,
+      "type": 14,
+      "model": "PT-WIRELESSENDDEVICE-NM-1CGE",
+      "slot_count": 0
+    },
+    {
+      "idx": 135,
+      "type": 14,
+      "model": "PT-WIRELESSENDDEVICE-NM-1FFE",
+      "slot_count": 0
+    },
+    {
+      "idx": 136,
+      "type": 14,
+      "model": "PT-WIRELESSENDDEVICE-NM-1FGE",
+      "slot_count": 0
+    },
+    {
+      "idx": 137,
+      "type": 14,
+      "model": "PT-WIRELESSENDDEVICE-NM-1W",
+      "slot_count": 0
+    },
+    {
+      "idx": 138,
+      "type": 14,
+      "model": "PT-WIRELESSENDDEVICE-NM-1W-A",
+      "slot_count": 0
+    },
+    {
+      "idx": 139,
+      "type": 14,
+      "model": "PT-WIRELESSENDDEVICE-NM-1W-AC",
+      "slot_count": 0
+    },
+    {
+      "idx": 140,
+      "type": 15,
+      "model": "Linksys-WPC300N",
+      "slot_count": 0
+    },
+    {
+      "idx": 141,
+      "type": 15,
+      "model": "PT-WIREDENDDEVICE-NM-1AM",
+      "slot_count": 0
+    },
+    {
+      "idx": 142,
+      "type": 15,
+      "model": "PT-WIREDENDDEVICE-NM-1CE",
+      "slot_count": 0
+    },
+    {
+      "idx": 143,
+      "type": 15,
+      "model": "PT-WIREDENDDEVICE-NM-1CFE",
+      "slot_count": 0
+    },
+    {
+      "idx": 144,
+      "type": 15,
+      "model": "PT-WIREDENDDEVICE-NM-1CGE",
+      "slot_count": 0
+    },
+    {
+      "idx": 145,
+      "type": 15,
+      "model": "PT-WIREDENDDEVICE-NM-1FFE",
+      "slot_count": 0
+    },
+    {
+      "idx": 146,
+      "type": 15,
+      "model": "PT-WIREDENDDEVICE-NM-1FGE",
+      "slot_count": 0
+    },
+    {
+      "idx": 147,
+      "type": 15,
+      "model": "PT-WIREDENDDEVICE-NM-1W",
+      "slot_count": 0
+    },
+    {
+      "idx": 148,
+      "type": 15,
+      "model": "PT-WIREDENDDEVICE-NM-1W-A",
+      "slot_count": 0
+    },
+    {
+      "idx": 149,
+      "type": 16,
+      "model": "PT-HEADPHONE",
+      "slot_count": 0
+    },
+    {
+      "idx": 150,
+      "type": 16,
+      "model": "PT-MICROPHONE",
+      "slot_count": 0
+    },
+    {
+      "idx": 151,
+      "type": 19,
+      "model": "ASA-Cover",
+      "slot_count": 0
+    },
+    {
+      "idx": 152,
+      "type": 21,
+      "model": "PT-CELL-NM-1CX",
+      "slot_count": 0
+    },
+    {
+      "idx": 153,
+      "type": 21,
+      "model": "PT-CELL-NM-3G/4G",
+      "slot_count": 0
+    },
+    {
+      "idx": 154,
+      "type": 22,
+      "model": "PT-IOT-NM-1CE",
+      "slot_count": 0
+    },
+    {
+      "idx": 155,
+      "type": 22,
+      "model": "PT-IOT-NM-1CFE",
+      "slot_count": 0
+    },
+    {
+      "idx": 156,
+      "type": 22,
+      "model": "PT-IOT-NM-1CGE",
+      "slot_count": 0
+    },
+    {
+      "idx": 157,
+      "type": 22,
+      "model": "PT-IOT-NM-1W",
+      "slot_count": 0
+    },
+    {
+      "idx": 158,
+      "type": 23,
+      "model": "PT-IOT-NM-1CE",
+      "slot_count": 0
+    },
+    {
+      "idx": 159,
+      "type": 23,
+      "model": "PT-IOT-NM-1CFE",
+      "slot_count": 0
+    },
+    {
+      "idx": 160,
+      "type": 23,
+      "model": "PT-IOT-NM-1CGE",
+      "slot_count": 0
+    },
+    {
+      "idx": 161,
+      "type": 23,
+      "model": "PT-IOT-NM-1FFE",
+      "slot_count": 0
+    },
+    {
+      "idx": 162,
+      "type": 23,
+      "model": "PT-IOT-NM-1FFE_SM",
+      "slot_count": 0
+    },
+    {
+      "idx": 163,
+      "type": 23,
+      "model": "PT-IOT-NM-1FGE",
+      "slot_count": 0
+    },
+    {
+      "idx": 164,
+      "type": 23,
+      "model": "PT-IOT-NM-1FGE_SM",
+      "slot_count": 0
+    },
+    {
+      "idx": 165,
+      "type": 23,
+      "model": "PT-IOT-NM-1W",
+      "slot_count": 0
+    },
+    {
+      "idx": 166,
+      "type": 23,
+      "model": "PT-IOT-NM-1W-AC",
+      "slot_count": 0
+    },
+    {
+      "idx": 167,
+      "type": 23,
+      "model": "PT-IOT-NM-3G/4G",
+      "slot_count": 0
+    },
+    {
+      "idx": 168,
+      "type": 23,
+      "model": "PT-IOT-NM-5G",
+      "slot_count": 0
+    },
+    {
+      "idx": 169,
+      "type": 26,
+      "model": "PT-IOT-CUSTOM-IO",
+      "slot_count": 0
+    },
+    {
+      "idx": 170,
+      "type": 27,
+      "model": "PT-IOT-POWER-ADAPTER",
+      "slot_count": 0
+    },
+    {
+      "idx": 171,
+      "type": 28,
+      "model": "PT-UNV-PWR-ADAPTER",
+      "slot_count": 0
+    },
+    {
+      "idx": 172,
+      "type": 29,
+      "model": "PWR-RGD-AC-DC",
+      "slot_count": 0
+    },
+    {
+      "idx": 173,
+      "type": 29,
+      "model": "PWR_IE50W_AC_L",
+      "slot_count": 0
+    },
+    {
+      "idx": 174,
+      "type": 29,
+      "model": "ROUTER-ADAPTER",
+      "slot_count": 0
+    },
+    {
+      "idx": 175,
+      "type": 30,
+      "model": "GLC-FE-100FX-RGD",
+      "slot_count": 0
+    },
+    {
+      "idx": 176,
+      "type": 30,
+      "model": "GLC-GE-100FX",
+      "slot_count": 0
+    },
+    {
+      "idx": 177,
+      "type": 30,
+      "model": "GLC-LH-SMD",
+      "slot_count": 0
+    },
+    {
+      "idx": 178,
+      "type": 30,
+      "model": "GLC-LX-SM-RGD",
+      "slot_count": 0
+    },
+    {
+      "idx": 179,
+      "type": 30,
+      "model": "GLC-SX-MM-RGD",
+      "slot_count": 0
+    },
+    {
+      "idx": 180,
+      "type": 30,
+      "model": "GLC-T",
+      "slot_count": 0
+    },
+    {
+      "idx": 181,
+      "type": 30,
+      "model": "GLC-TE",
+      "slot_count": 0
+    },
+    {
+      "idx": 182,
+      "type": 31,
+      "model": "ACCESS_POINT_POWER_ADAPTER",
+      "slot_count": 0
+    },
+    {
+      "idx": 183,
+      "type": 32,
+      "model": "C3650-BUILTIN",
+      "slot_count": 0
+    },
+    {
+      "idx": 184,
+      "type": 32,
+      "model": "C3650-SFP-BUILTIN",
+      "slot_count": 0
+    },
+    {
+      "idx": 185,
+      "type": 32,
+      "model": "C9320-BUILTIN",
+      "slot_count": 0
+    },
+    {
+      "idx": 186,
+      "type": 32,
+      "model": "C9320-SFP-BUILTIN",
+      "slot_count": 2,
+      "slot_types": [
+        30,
+        30
+      ]
+    },
+    {
+      "idx": 187,
+      "type": 32,
+      "model": "IE3400-SFP-BUILTIN",
+      "slot_count": 3,
+      "slot_types": [
+        30,
+        30,
+        30
+      ]
+    },
+    {
+      "idx": 188,
+      "type": 32,
+      "model": "IR1101-BUILTIN",
+      "slot_count": 1,
+      "slot_types": [
+        30
+      ]
+    },
+    {
+      "idx": 189,
+      "type": 32,
+      "model": "IR8340-LAN-BUILTIN",
+      "slot_count": 12,
+      "slot_types": [
+        30,
+        30,
+        30,
+        30,
+        30,
+        30,
+        30,
+        30,
+        30,
+        30,
+        30,
+        30
+      ]
+    },
+    {
+      "idx": 190,
+      "type": 32,
+      "model": "IR8340-WAN-BUILTIN",
+      "slot_count": 2,
+      "slot_types": [
+        30,
+        30
+      ]
+    },
+    {
+      "idx": 191,
+      "type": 32,
+      "model": "ISA3000-SFP-BUILTIN",
+      "slot_count": 0
+    },
+    {
+      "idx": 192,
+      "type": 32,
+      "model": "ISR4321-BUILTIN",
+      "slot_count": 1,
+      "slot_types": [
+        30
+      ]
+    },
+    {
+      "idx": 193,
+      "type": 32,
+      "model": "ISR4331-BUILTIN",
+      "slot_count": 2,
+      "slot_types": [
+        30,
+        30
+      ]
+    },
+    {
+      "idx": 194,
+      "type": 32,
+      "model": "PT-CONTROLLER-BUILTIN",
+      "slot_count": 0
+    },
+    {
+      "idx": 195,
+      "type": 32,
+      "model": "PT8200-BUILTIN",
+      "slot_count": 2,
+      "slot_types": [
+        30,
+        30
+      ]
+    },
+    {
+      "idx": 196,
+      "type": 34,
+      "model": "MERAKI-POWER-ADAPTER",
+      "slot_count": 0
+    },
+    {
+      "idx": 197,
+      "type": 36,
+      "model": "ISA-DC-POWER-ADAPTER-A",
+      "slot_count": 0
+    },
+    {
+      "idx": 198,
+      "type": 37,
+      "model": "ISA-DC-POWER-ADAPTER-B",
+      "slot_count": 0
+    }
+  ],
+  "device_probes": {
+    "ROUTER:2811": {
+      "type_int": 0,
+      "model": "2811",
+      "uuid": "Router0",
+      "name": "Router0",
+      "power": true,
+      "supported_modules": [
+        "GLC-LH-SMD:../art/PhysicalView/glc-lh-smd.pngThe 1000BASE-LX/LH SFP operates in Gigabit Ethernet ports of Cisco Industrial Ethernet and SmartGrid switches and routers",
+        "HWIC-1GE-SFP:../art/PhysicalView/gModuleHWIC-1GE-SFP.pngThe HWIC-1GE-SFP is a single-wide HWIC with one Small Form-Factor Pluggable (SFP) slot. The SFP slot can be populated with Cisco copper and optical Gigabit Ethernet SFPs to provide 1-port Gigabit Ethernet connectivity on all Cisco Integrated Services Routers",
+        "HWIC-2T:../art/PhysicalView/gModuleHWIC-2T.pngThe HWIC-2T is a Cisco 2-Port Serial High-Speed WAN Interface Card, providing 2 serial ports.",
+        "HWIC-4ESW:../art/PhysicalView/gModuleNM-HWIC-4ESW.pngThe HWIC-4ESW provides four switching ports.",
+        "HWIC-8A:../art/PhysicalView/gModuleHWIC-8A.pngThe HWIC-8A provides up to eight asynchronous EIA-232 connections to console ports.",
+        "HWIC-AP-AG-B:../art/PhysicalView/gModuleHWIC-AP-AG-B.pngThe HWIC-AP-AG-B module is a High-Speed WAN Interface Card providing integrated Access Point functionality in the Cisco 1800 (Modular), Cisco 2800, and Cisco 3800 Integrated Services Routers. It supports Single Band 802.11b/g or Dual Band 802.11a/b/g radios.",
+        "NM-1E:../art/PhysicalView/gModuleNM-1E.pngThe NM-1E features a single Ethernet port that can connect a LAN backbone which can also support either six PRI connections to aggregate ISDN lines, or 24 synchronous/asynchronous ports.",
+        "NM-1E2W:../art/PhysicalView/gModuleNM-1E2W.pngThe NM-1E2W provides a single Ethernet port with two WIC slots that can support a single Ethernet LAN, together with two serial/ISDN backhaul lines, and still allow multiple serial or ISDN in the same chassis.",
+        "NM-1FE-FX:../art/PhysicalView/gModuleNM-1FE-FX.pngThe NM-1FE-FX Module provides one Fast-Ethernet interface for use with multi mode fiber media. Ideal for a wide range of LAN applications, the Fast Ethernet network modules support many internetworking features and standards. Single port network modules offer autosensing 10/100BaseTX or 100BaseFX Ethernet.",
+        "NM-1FE-TX:../art/PhysicalView/gModuleNM-1FE-TX.pngThe NM-1FE-TX Module provides one Fast-Ethernet interface for use with copper media. Ideal for a wide range of LAN applications, the Fast Ethernet network modules support many internetworking features and standards. Single port network modules offer autosensing 10/100BaseTX or 100BaseFX Ethernet. The TX (copper) version supports virtual LAN (VLAN) deployment.",
+        "NM-1FE2W:../art/PhysicalView/gModuleNM-1FE2W.pngThe NM-1FE2W Module provides one Fast-Ethernet interface for use with copper media, in addition to two Wan Interface Card expansion slots. Ideal for a wide range of LAN applications, the Fast Ethernet network modules support many internetworking features and standards. Single port network modules offer autosensing 10/100BaseTX or 100BaseFX Ethernet. The TX (copper) version supports virtual LAN (VLAN) deployment.",
+        "NM-2E2W:../art/PhysicalView/gModuleNM-2E2W.pngThe NM-2E2W provides two Ethernet ports with two WIC slots that can support two Ethernet LANs, together with two serial/ISDN backhaul lines, and still allow multiple serial or ISDN in the same chassis.",
+        "NM-2FE2W:../art/PhysicalView/gModuleNM-2FE2W.pngThe NM-2FE2W Module provides two Fast-Ethernet interfaces for use with copper media, in addition to two Wan Interface Card expansion slots. Ideal for a wide range of LAN applications, the Fast Ethernet network modules support many internetworking features and standards.",
+        "NM-2W:../art/PhysicalView/gModuleNM-2W.pngThe NM-2W Module provides two WAN Interface Card expansion slots. It can be used with a broad range of interface cards, supporting a diverse array of physical media and network protocols.",
+        "NM-4A/S:../art/PhysicalView/gModuleNM-4AS.pngThe 4-port asynchronous/synchronous serial network module provides flexible multi-protocol support, with each port individually configurable in synchronous or asynchronous mode, offering mixed-media dial support in a single chassis. Applications for Asynchronous/Synchronous support include: \tLow speed WAN aggregation (up to 128 Kbps), dial-up modem support, Async or Sync connections to management ports of other equipment, and transport of legacy protocols such as Bi-sync and SDLC.",
+        "NM-4E:../art/PhysicalView/gModuleNM-4E.pngThe NM-4E features four Ethernet ports for multifunction solutions that require higher-density Ethernet than the mixed-media network modules.",
+        "NM-8A/S:../art/PhysicalView/gModuleNM-8AS.pngThe 8-port asynchronous/synchronous serial network module provides flexible multi-protocol support, with each port individually configurable in synchronous or asynchronous mode, offering mixed-media dial support in a single chassis. Applications for Asynchronous/Synchronous support include: \tLow speed WAN aggregation (up to 128 Kbps), dial-up modem support, Async or Sync connections to management ports of other equipment, and transport of legacy protocols such as Bi-sync and SDLC.",
+        "NM-8AM:../art/PhysicalView/gModuleNM-8AM.pngThe NM-8AM Integrated V.92 analog modem network module provides cost-effective analog telephone service connectivity for lower-density remote-access service (RAS), dial-out and fax-out modem access, asynchronous dial-on-demand routing (DDR) plus dial backup, and remote router management. Both the 8-port and 16-port versions use RJ-11 jacks to connect the integrated modems to basic analog telephone lines on the public switched telephone network (PSTN) or private telephony systems.",
+        "NM-Cover:../art/PhysicalView/gModuleNM-Cover.pngThe NM cover plate provides protection for the internal electronic components. It also helps maintain adequate cooling by normalizing airflow.",
+        "NM-ESW-161:../art/PhysicalView/gModuleNM-ESW-161.pngThe NM-ESW-161 provides 16 switching ports.",
+        "WIC-1AM:../art/PhysicalView/gModuleNM-WIC-1AM.pngThe WIC-1AM card features dual RJ-11 connectors, which are used for basic telephone service connections. The WIC-1AM uses one port for connection to a standard telephone line, and the other port can be connected to a basic analog telephone for use when the modem is idle.",
+        "WIC-1ENET:../art/PhysicalView/gModuleNM-WIC-1ENET.pngThe WIC-1ENET is a single-port 10 Mbps Ethernet interface card, for use with 10BASE-T Ethernet LANs.",
+        "WIC-1T:../art/PhysicalView/gModuleNM-WIC-1T.pngThe WIC-1T provides a single port serial connection to remote sites or legacy serial network devices such as Synchronous Data Link Control (SDLC) concentrators, alarm systems, and packet over SONET (POS) devices.",
+        "WIC-2AM:../art/PhysicalView/gModuleNM-WIC-2AM.pngThe WIC-2AM card features dual RJ-11 connectors, which are used for basic telephone service connections. The WIC-2AM has two modem ports to allow multiple data communication connections.",
+        "WIC-2T:../art/PhysicalView/gModuleNM-WIC-2T.pngThe dual-serial port WAN interface cards (WICs) feature Cisco`s new, compact, high-density Smart Serial connector to support a wide variety of electrical interfaces when used with the appropriate transition cable. Two cables are required to support the two ports on the WIC. Each port on a WIC is a different physical interface and can support different protocols such as Point-to-Point protocol (PPP) or Frame Relay and Data Terminal Equipment/Data Communications Equipment (DTE/DCE).",
+        "WIC-Cover:../art/PhysicalView/gModuleWIC-Cover.pngThe WIC cover plate provides protection for the internal electronic components. It also helps maintain adequate cooling by normalizing airflow."
+      ],
+      "root_module": {
+        "module_name": "None",
+        "slot_path": "",
+        "module_type": 18,
+        "slot_count": 2,
+        "port_count": 0,
+        "children": [
+          {
+            "module_name": "None",
+            "slot_path": "",
+            "module_type": 18,
+            "slot_count": 4,
+            "port_count": 2,
+            "children": [],
+            "slot_types": [
+              2,
+              2,
+              2,
+              2
+            ],
+            "child_idx": 0
+          }
+        ],
+        "slot_types": [
+          18,
+          1
+        ]
+      },
+      "port_count_before": 3,
+      "port_names_before": [
+        "Vlan1",
+        "FastEthernet0/0",
+        "FastEthernet0/1"
+      ],
+      "device_methods_filtered": [
+        "addModule",
+        "getPower",
+        "getRootModule",
+        "getSupportedModule",
+        "removeModule",
+        "setPower"
+      ]
+    },
+    "ROUTER:2911": {
+      "type_int": 0,
+      "model": "2911",
+      "uuid": "Router1",
+      "name": "Router1",
+      "power": true,
+      "supported_modules": [
+        "GLC-LH-SMD:../art/PhysicalView/glc-lh-smd.pngThe 1000BASE-LX/LH SFP operates in Gigabit Ethernet ports of Cisco Industrial Ethernet and SmartGrid switches and routers",
+        "HWIC-1GE-SFP:../art/PhysicalView/gModuleHWIC-1GE-SFP.pngThe HWIC-1GE-SFP is a single-wide HWIC with one Small Form-Factor Pluggable (SFP) slot. The SFP slot can be populated with Cisco copper and optical Gigabit Ethernet SFPs to provide 1-port Gigabit Ethernet connectivity on all Cisco Integrated Services Routers",
+        "HWIC-2T:../art/PhysicalView/gModuleHWIC-2T.pngThe HWIC-2T is a Cisco 2-Port Serial High-Speed WAN Interface Card, providing 2 serial ports.",
+        "HWIC-4ESW:../art/PhysicalView/gModuleNM-HWIC-4ESW.pngThe HWIC-4ESW provides four switching ports.",
+        "HWIC-8A:../art/PhysicalView/gModuleHWIC-8A.pngThe HWIC-8A provides up to eight asynchronous EIA-232 connections to console ports.",
+        "WIC-Cover:../art/PhysicalView/gModuleWIC-Cover.pngThe WIC cover plate provides protection for the internal electronic components. It also helps maintain adequate cooling by normalizing airflow."
+      ],
+      "root_module": {
+        "module_name": "None",
+        "slot_path": "",
+        "module_type": 18,
+        "slot_count": 1,
+        "port_count": 0,
+        "children": [
+          {
+            "module_name": "None",
+            "slot_path": "",
+            "module_type": 18,
+            "slot_count": 4,
+            "port_count": 3,
+            "children": [],
+            "slot_types": [
+              2,
+              2,
+              2,
+              2
+            ],
+            "child_idx": 0
+          }
+        ],
+        "slot_types": [
+          18
+        ]
+      },
+      "port_count_before": 4,
+      "port_names_before": [
+        "Vlan1",
+        "GigabitEthernet0/0",
+        "GigabitEthernet0/1",
+        "GigabitEthernet0/2"
+      ],
+      "device_methods_filtered": [
+        "addModule",
+        "getPower",
+        "getRootModule",
+        "getSupportedModule",
+        "removeModule",
+        "setPower"
+      ]
+    },
+    "ROUTER:1841": {
+      "type_int": 0,
+      "model": "1841",
+      "uuid": "Router2",
+      "name": "Router2",
+      "power": true,
+      "supported_modules": [
+        "GLC-LH-SMD:../art/PhysicalView/glc-lh-smd.pngThe 1000BASE-LX/LH SFP operates in Gigabit Ethernet ports of Cisco Industrial Ethernet and SmartGrid switches and routers",
+        "HWIC-1GE-SFP:../art/PhysicalView/gModuleHWIC-1GE-SFP.pngThe HWIC-1GE-SFP is a single-wide HWIC with one Small Form-Factor Pluggable (SFP) slot. The SFP slot can be populated with Cisco copper and optical Gigabit Ethernet SFPs to provide 1-port Gigabit Ethernet connectivity on all Cisco Integrated Services Routers",
+        "HWIC-2T:../art/PhysicalView/gModuleHWIC-2T.pngThe HWIC-2T is a Cisco 2-Port Serial High-Speed WAN Interface Card, providing 2 serial ports.",
+        "HWIC-4ESW:../art/PhysicalView/gModuleNM-HWIC-4ESW.pngThe HWIC-4ESW provides four switching ports.",
+        "HWIC-8A:../art/PhysicalView/gModuleHWIC-8A.pngThe HWIC-8A provides up to eight asynchronous EIA-232 connections to console ports.",
+        "HWIC-AP-AG-B:../art/PhysicalView/gModuleHWIC-AP-AG-B.pngThe HWIC-AP-AG-B module is a High-Speed WAN Interface Card providing integrated Access Point functionality in the Cisco 1800 (Modular), Cisco 2800, and Cisco 3800 Integrated Services Routers. It supports Single Band 802.11b/g or Dual Band 802.11a/b/g radios.",
+        "WIC-1AM:../art/PhysicalView/gModuleNM-WIC-1AM.pngThe WIC-1AM card features dual RJ-11 connectors, which are used for basic telephone service connections. The WIC-1AM uses one port for connection to a standard telephone line, and the other port can be connected to a basic analog telephone for use when the modem is idle.",
+        "WIC-1ENET:../art/PhysicalView/gModuleNM-WIC-1ENET.pngThe WIC-1ENET is a single-port 10 Mbps Ethernet interface card, for use with 10BASE-T Ethernet LANs.",
+        "WIC-1T:../art/PhysicalView/gModuleNM-WIC-1T.pngThe WIC-1T provides a single port serial connection to remote sites or legacy serial network devices such as Synchronous Data Link Control (SDLC) concentrators, alarm systems, and packet over SONET (POS) devices.",
+        "WIC-2AM:../art/PhysicalView/gModuleNM-WIC-2AM.pngThe WIC-2AM card features dual RJ-11 connectors, which are used for basic telephone service connections. The WIC-2AM has two modem ports to allow multiple data communication connections.",
+        "WIC-2T:../art/PhysicalView/gModuleNM-WIC-2T.pngThe dual-serial port WAN interface cards (WICs) feature Cisco`s new, compact, high-density Smart Serial connector to support a wide variety of electrical interfaces when used with the appropriate transition cable. Two cables are required to support the two ports on the WIC. Each port on a WIC is a different physical interface and can support different protocols such as Point-to-Point protocol (PPP) or Frame Relay and Data Terminal Equipment/Data Communications Equipment (DTE/DCE).",
+        "WIC-Cover:../art/PhysicalView/gModuleWIC-Cover.pngThe WIC cover plate provides protection for the internal electronic components. It also helps maintain adequate cooling by normalizing airflow."
+      ],
+      "root_module": {
+        "module_name": "None",
+        "slot_path": "",
+        "module_type": 18,
+        "slot_count": 1,
+        "port_count": 0,
+        "children": [
+          {
+            "module_name": "None",
+            "slot_path": "",
+            "module_type": 18,
+            "slot_count": 2,
+            "port_count": 2,
+            "children": [],
+            "slot_types": [
+              2,
+              2
+            ],
+            "child_idx": 0
+          }
+        ],
+        "slot_types": [
+          18
+        ]
+      },
+      "port_count_before": 3,
+      "port_names_before": [
+        "Vlan1",
+        "FastEthernet0/0",
+        "FastEthernet0/1"
+      ],
+      "device_methods_filtered": [
+        "addModule",
+        "getPower",
+        "getRootModule",
+        "getSupportedModule",
+        "removeModule",
+        "setPower"
+      ]
+    },
+    "ROUTER:ISR4321": {
+      "type_int": 0,
+      "model": "ISR4321",
+      "uuid": "Router3",
+      "name": "Router3",
+      "power": true,
+      "supported_modules": [
+        "GLC-GE-100FX:../art/PhysicalView/gSfp-glc-ge-100fx.png100BASE-FX SFP module for Gigabit Ethernet ports, 1310 nm wavelength, 2 km over MMF",
+        "GLC-LH-SMD:../art/PhysicalView/glc-lh-smd.pngThe 1000BASE-LX/LH SFP operates in Gigabit Ethernet ports of Cisco Industrial Ethernet and SmartGrid switches and routers",
+        "NIM-2T:../art/PhysicalView/gModuleNIM-2T.pngThe NIM-2T is a 2 port multi-protocol Synchronous Serial NIM",
+        "NIM-Cover:../art/PhysicalView/gModuleNIM-Cover.pngThe NIM cover plate provides protection for the internal electronic components. It also helps maintain adequate cooling by normalizing airflow.",
+        "NIM-ES2-4:../art/PhysicalView/gModuleNM-NIM-ES4.pngThe NIM-ES2-4 provides four switching ports."
+      ],
+      "root_module": {
+        "module_name": "None",
+        "slot_path": "",
+        "module_type": 18,
+        "slot_count": 1,
+        "port_count": 0,
+        "children": [
+          {
+            "module_name": "None",
+            "slot_path": "",
+            "module_type": 18,
+            "slot_count": 3,
+            "port_count": 0,
+            "children": [
+              {
+                "module_name": "None",
+                "slot_path": "",
+                "module_type": 32,
+                "slot_count": 1,
+                "port_count": 2,
+                "children": [],
+                "slot_types": [
+                  30
+                ],
+                "child_idx": 0
+              }
+            ],
+            "slot_types": [
+              32,
+              2,
+              2
+            ],
+            "child_idx": 0
+          }
+        ],
+        "slot_types": [
+          18
+        ]
+      },
+      "port_count_before": 3,
+      "port_names_before": [
+        "Vlan1",
+        "GigabitEthernet0/0/0",
+        "GigabitEthernet0/0/1"
+      ],
+      "device_methods_filtered": [
+        "addModule",
+        "getPower",
+        "getRootModule",
+        "getSupportedModule",
+        "removeModule",
+        "setPower"
+      ]
+    },
+    "SWITCH:2960-24TT": {
+      "type_int": 1,
+      "model": "2960-24TT",
+      "uuid": "Switch0",
+      "name": "Switch0",
+      "power": true,
+      "supported_modules": [],
+      "root_module": {
+        "module_name": "None",
+        "slot_path": "",
+        "module_type": 18,
+        "slot_count": 1,
+        "port_count": 0,
+        "children": [
+          {
+            "module_name": "None",
+            "slot_path": "",
+            "module_type": 18,
+            "slot_count": 0,
+            "port_count": 26,
+            "children": [],
+            "child_idx": 0
+          }
+        ],
+        "slot_types": [
+          18
+        ]
+      },
+      "port_count_before": 27,
+      "port_names_before": [
+        "Vlan1",
+        "FastEthernet0/1",
+        "FastEthernet0/2",
+        "FastEthernet0/3",
+        "FastEthernet0/4",
+        "FastEthernet0/5",
+        "FastEthernet0/6",
+        "FastEthernet0/7",
+        "FastEthernet0/8",
+        "FastEthernet0/9",
+        "FastEthernet0/10",
+        "FastEthernet0/11",
+        "FastEthernet0/12",
+        "FastEthernet0/13",
+        "FastEthernet0/14",
+        "FastEthernet0/15",
+        "FastEthernet0/16",
+        "FastEthernet0/17",
+        "FastEthernet0/18",
+        "FastEthernet0/19",
+        "FastEthernet0/20",
+        "FastEthernet0/21",
+        "FastEthernet0/22",
+        "FastEthernet0/23",
+        "FastEthernet0/24",
+        "GigabitEthernet0/1",
+        "GigabitEthernet0/2"
+      ],
+      "device_methods_filtered": [
+        "addModule",
+        "getPower",
+        "getRootModule",
+        "getSupportedModule",
+        "removeModule",
+        "setPower"
+      ]
+    },
+    "MLS:3560-24PS": {
+      "type_int": 16,
+      "model": "3560-24PS",
+      "uuid": "Multilayer Switch0",
+      "name": "Multilayer Switch0",
+      "power": true,
+      "supported_modules": [],
+      "root_module": {
+        "module_name": "None",
+        "slot_path": "",
+        "module_type": 18,
+        "slot_count": 1,
+        "port_count": 0,
+        "children": [
+          {
+            "module_name": "None",
+            "slot_path": "",
+            "module_type": 18,
+            "slot_count": 0,
+            "port_count": 26,
+            "children": [],
+            "child_idx": 0
+          }
+        ],
+        "slot_types": [
+          18
+        ]
+      },
+      "port_count_before": 27,
+      "port_names_before": [
+        "Vlan1",
+        "FastEthernet0/1",
+        "FastEthernet0/2",
+        "FastEthernet0/3",
+        "FastEthernet0/4",
+        "FastEthernet0/5",
+        "FastEthernet0/6",
+        "FastEthernet0/7",
+        "FastEthernet0/8",
+        "FastEthernet0/9",
+        "FastEthernet0/10",
+        "FastEthernet0/11",
+        "FastEthernet0/12",
+        "FastEthernet0/13",
+        "FastEthernet0/14",
+        "FastEthernet0/15",
+        "FastEthernet0/16",
+        "FastEthernet0/17",
+        "FastEthernet0/18",
+        "FastEthernet0/19",
+        "FastEthernet0/20",
+        "FastEthernet0/21",
+        "FastEthernet0/22",
+        "FastEthernet0/23",
+        "FastEthernet0/24",
+        "GigabitEthernet0/1",
+        "GigabitEthernet0/2"
+      ],
+      "device_methods_filtered": [
+        "addModule",
+        "getPower",
+        "getRootModule",
+        "getSupportedModule",
+        "removeModule",
+        "setPower"
+      ]
+    },
+    "PC:PC-PT": {
+      "type_int": 8,
+      "model": "PC-PT",
+      "uuid": "PC0",
+      "name": "PC0",
+      "power": true,
+      "supported_modules": [
+        "Linksys-WMP300N:../art/PhysicalView/gPTHostNM-1W.pngThe WMP300N module provides one 2.4GHz wireless interface suitable for connection to wireless networks. The module supports protocols that use Ethernet for LAN access.",
+        "PT-HEADPHONE:../art/PhysicalView/gPTHostHeadset.pngThe headphone allows the user to listen to music and sounds from the computer.",
+        "PT-HOST-NM-1AM:../art/PhysicalView/gPTHostNM-1AM.pngThe PT-HOST-NM-1AM card features dual RJ-11 connectors, which are used for basic telephone service connections. The WIC-1AM uses one port for connection to a standard telephone line, and the other port can be connected to a basic analog telephone for use when the modem is idle.",
+        "PT-HOST-NM-1CE:../art/PhysicalView/gPTHostNM-1CE.pngThe PT-HOST-NM-1CE features a single Ethernet port that can connect a LAN backbone which can also support either six PRI connections to aggregate ISDN lines, or 24 synchronous/asynchronous ports.",
+        "PT-HOST-NM-1CFE:../art/PhysicalView/gPTHostNM-1CFE.pngThe PT-HOST-NM-1CFE Module provides one Fast-Ethernet interface for use with copper media. Ideal for a wide range of LAN applications, the Fast Ethernet network modules support many internetworking features and standards. Single port network modules offer autosensing 10/100BaseTX or 100BaseFX Ethernet. The TX (copper) version supports virtual LAN (VLAN) deployment.",
+        "PT-HOST-NM-1CGE:../art/PhysicalView/gPTHostNM-1CGE.pngThe single-port Cisco Gigabit Ethernet Network Module (part number PT-HOST-NM-1CGE) provides Gigabit Ethernet copper connectivity for access routers. The module is supported by the Cisco 2691, Cisco 3660, Cisco 3725, and Cisco 3745 series routers. This network module has one gigabit interface converter (GBIC) slot to carry any standard copper or optical Cisco GBIC.",
+        "PT-HOST-NM-1FFE:../art/PhysicalView/gPTHostNM-1FFE.pngThe PT-HOST-NM-1FFE Module provides one Fast-Ethernet interface for use with multi mode fiber media. Ideal for a wide range of LAN applications, the Fast Ethernet network modules support many internetworking features and standards. Single port network modules offer autosensing 10/100BaseTX or 100BaseFX Ethernet.",
+        "PT-HOST-NM-1FFE-SM:../art/PhysicalView/gPTHostNM-SMF.pngThe PT-HOST-NM-1FFE-SM Module provides one Fast-Ethernet interface for use with single mode fiber media. Ideal for a wide range of LAN applications, the Fast Ethernet network modules support many internetworking features and standards. Single port network modules offer autosensing 10/100BaseTX or 100BaseFX Ethernet.",
+        "PT-HOST-NM-1FGE:../art/PhysicalView/gPTHostNM-1FGE.pngThe single-port Cisco Gigabit Ethernet Network Module (part number PT-HOST-NM-1FGE) provides Gigabit Ethernet optical connectivity for access routers. The module is supported by the Cisco 2691, Cisco 3660, Cisco 3725, and Cisco 3745 series routers. This network module has one gigabit interface converter (GBIC) slot to carry any standard copper or optical Cisco GBIC.",
+        "PT-HOST-NM-1FGE-SM:../art/PhysicalView/gPTHostNM-SMF.pngThe PT-HOST-NM-1FGE-SM Module provides one Gigabit-Ethernet interface for use with single mode fiber media. Ideal for a wide range of LAN applications, the Gigabit Ethernet network modules support many internetworking features and standards. Single port network modules offer autosensing 10/100BaseTX or 1000BaseFX Ethernet.",
+        "PT-HOST-NM-1W:../art/PhysicalView/gPTHostNM-1W.pngThe PT-HOST-NM-1W module provides one 2.4GHz wireless interface suitable for connection to wireless networks. The module supports protocols that use Ethernet for LAN access.",
+        "PT-HOST-NM-1W-A:../art/PhysicalView/gPTHostNM-1W.pngThe PT-HOST-NM-1W-A module provides one 5GHz wireless interface suitable for connection to wireless 802.11a networks. The module supports protocols that use Ethernet for LAN access.",
+        "PT-HOST-NM-1W-AC:../art/PhysicalView/gPTHostNM-1W.pngThe PT-HOST-NM-1W-AC module provides one 5 GHz wireless interface suitable for connection to wireless 802.11ac or 802.11b/g/n networks on the 2.4 GHz band. The module supports protocols that use Ethernet for LAN access.",
+        "PT-HOST-NM-3G/4G:../art/PhysicalView/gPTPcNM-3G4G.pngThe PT-HOST-NM-3G/4G module provides one cellular interface suitable for connection to 3G/4G networks.",
+        "PT-HOST-NM-5G:../art/PhysicalView/gPTPcNM-5G.pngThe PT-HOST-NM-5G module provides one cellular interface suitable for connection to 5G networks.",
+        "PT-HOST-NM-COVER:../art/PhysicalView/gPTHostNM-Cover.pngThe cover plate provides protection for the internal electronic components. It also helps maintain adequate cooling by normalizing airflow.",
+        "PT-MICROPHONE:../art/PhysicalView/gPTHostMicrophone.pngThe microphone allows the computer to record sound."
+      ],
+      "root_module": {
+        "module_name": "None",
+        "slot_path": "",
+        "module_type": 18,
+        "slot_count": 2,
+        "port_count": 0,
+        "children": [
+          {
+            "module_name": "None",
+            "slot_path": "",
+            "module_type": 7,
+            "slot_count": 0,
+            "port_count": 1,
+            "children": [],
+            "child_idx": 0
+          },
+          {
+            "module_name": "None",
+            "slot_path": "",
+            "module_type": 18,
+            "slot_count": 2,
+            "port_count": 0,
+            "children": [],
+            "slot_types": [
+              16,
+              16
+            ],
+            "child_idx": 1
+          }
+        ],
+        "slot_types": [
+          7,
+          18
+        ]
+      },
+      "port_count_before": 2,
+      "port_names_before": [
+        "FastEthernet0",
+        "Bluetooth"
+      ],
+      "device_methods_filtered": [
+        "addModule",
+        "getPower",
+        "getRootModule",
+        "getSupportedModule",
+        "removeModule",
+        "setPower"
+      ]
+    },
+    "LAPTOP:Laptop-PT": {
+      "type_int": 18,
+      "model": "Laptop-PT",
+      "uuid": "Laptop0",
+      "name": "Laptop0",
+      "power": true,
+      "supported_modules": [
+        "Linksys-WPC300N:../art/PhysicalView/gPTLaptopNM-1W.pngThe Linksys-WPC300N module provides one 2.4GHz wireless interface suitable for connection to wireless networks. The module supports protocols that use Ethernet for LAN access.",
+        "PT-HEADPHONE:../art/PhysicalView/gPTHostHeadset.pngThe headphone allows the user to listen to music and sounds from the computer.",
+        "PT-LAPTOP-NM-1AM:../art/PhysicalView/gPTLaptopNM-1AM.pngThe PT-LAPTOP-NM-1AM card features dual RJ-11 connectors, which are used for basic telephone service connections. The WIC-1AM uses one port for connection to a standard telephone line, and the other port can be connected to a basic analog telephone for use when the modem is idle.",
+        "PT-LAPTOP-NM-1CE:../art/PhysicalView/gPTLaptopNM-1CE.pngThe PT-LAPTOP-NM-1CE features a single Ethernet port that can connect a LAN backbone which can also support either six PRI connections to aggregate ISDN lines, or 24 synchronous/asynchronous ports.",
+        "PT-LAPTOP-NM-1CFE:../art/PhysicalView/gPTLaptopNM-1CFE.pngThe PT-LAPTOP-NM-1CFE Module provides one Fast-Ethernet interface for use with copper media. Ideal for a wide range of LAN applications, the Fast Ethernet network modules support many internetworking features and standards. Single port network modules offer autosensing 10/100BaseTX or 100BaseFX Ethernet. The TX (copper) version supports virtual LAN (VLAN) deployment.",
+        "PT-LAPTOP-NM-1CGE:../art/PhysicalView/gPTLaptopNM-1CGE.pngThe single-port Cisco Gigabit Ethernet Network Module (part number PT-LAPTOP-NM-1CGE) provides Gigabit Ethernet copper connectivity for access routers. The module is supported by the Cisco 2691, Cisco 3660, Cisco 3725, and Cisco 3745 series routers. This network module has one gigabit interface converter (GBIC) slot to carry any standard copper or optical Cisco GBIC.",
+        "PT-LAPTOP-NM-1FFE:../art/PhysicalView/gPTLaptopNM-1FFE.pngThe PT-LAPTOP-NM-1FFE Module provides one Fast-Ethernet interface for use with multi mode fiber media. Ideal for a wide range of LAN applications, the Fast Ethernet network modules support many internetworking features and standards. Single port network modules offer autosensing 10/100BaseTX or 100BaseFX Ethernet.",
+        "PT-LAPTOP-NM-1FFE-SM:../art/PhysicalView/gPTLaptopNM-1FFE-SM.pngThe PT-LAPTOP-NM-1FFE-SM Module provides one Fast-Ethernet interface for use with single mode fiber media. Ideal for a wide range of LAN applications, the Fast Ethernet network modules support many internetworking features and standards. Single port network modules offer autosensing 10/100BaseTX or 100BaseFX Ethernet.",
+        "PT-LAPTOP-NM-1FGE:../art/PhysicalView/gPTLaptopNM-1FGE.pngThe single-port Cisco Gigabit Ethernet Network Module (part number PT-LAPTOP-NM-1FGE) provides Gigabit Ethernet optical connectivity for access routers. The module is supported by the Cisco 2691, Cisco 3660, Cisco 3725, and Cisco 3745 series routers. This network module has one gigabit interface converter (GBIC) slot to carry any standard copper or optical Cisco GBIC.",
+        "PT-LAPTOP-NM-1FGE-SM:../art/PhysicalView/gPTLaptopNM-1FFE-SM.pngThe PT-LAPTOP-NM-1FGE-SM Module provides one Gigabit-Ethernet interface for use with single mode fiber media. Ideal for a wide range of LAN applications, the Gigabit Ethernet network modules support many internetworking features and standards. Single port network modules offer autosensing 10/100BaseTX or 1000BaseFX Ethernet.",
+        "PT-LAPTOP-NM-1W:../art/PhysicalView/gPTLaptopNM-1W.pngThe PT-LAPTOP-NM-1W module provides one 2.4GHz wireless interface suitable for connection to wireless networks. The module supports protocols that use Ethernet for LAN access.",
+        "PT-LAPTOP-NM-1W-A:../art/PhysicalView/gPTLaptopNM-1W.pngThe PT-LAPTOP-NM-1W-A module provides one 5GHz wireless interface suitable for connection to wireless 802.11a networks. The module supports protocols that use Ethernet for LAN access.",
+        "PT-LAPTOP-NM-1W-AC:../art/PhysicalView/gPTLaptopNM-1W.pngThe PT-LAPTOP-NM-1W-AC module provides one 5 GHz wireless interface suitable for connection to wireless 802.11ac or 802.11b/g/n networks on the 2.4 GHz band. The module supports protocols that use Ethernet for LAN access.",
+        "PT-LAPTOP-NM-3G/4G:../art/PhysicalView/gPTLaptopNM-3G.pngThe PT-LAPTOP-NM-3G/4G module provides one cellular interface suitable for connection to 3G/4G networks.",
+        "PT-LAPTOP-NM-5G:../art/PhysicalView/gPTLaptopNM-5G.pngThe PT-LAPTOP-NM-5G module provides one cellular interface suitable for connection to 5G networks.",
+        "PT-MICROPHONE:../art/PhysicalView/gPTHostMicrophone.pngThe microphone allows the computer to record sound."
+      ],
+      "root_module": {
+        "module_name": "None",
+        "slot_path": "",
+        "module_type": 18,
+        "slot_count": 2,
+        "port_count": 0,
+        "children": [
+          {
+            "module_name": "None",
+            "slot_path": "",
+            "module_type": 9,
+            "slot_count": 0,
+            "port_count": 1,
+            "children": [],
+            "child_idx": 0
+          },
+          {
+            "module_name": "None",
+            "slot_path": "",
+            "module_type": 18,
+            "slot_count": 2,
+            "port_count": 0,
+            "children": [],
+            "slot_types": [
+              16,
+              16
+            ],
+            "child_idx": 1
+          }
+        ],
+        "slot_types": [
+          9,
+          18
+        ]
+      },
+      "port_count_before": 2,
+      "port_names_before": [
+        "FastEthernet0",
+        "Bluetooth"
+      ],
+      "device_methods_filtered": [
+        "addModule",
+        "getPower",
+        "getRootModule",
+        "getSupportedModule",
+        "removeModule",
+        "setPower"
+      ]
+    },
+    "SERVER:Server-PT": {
+      "type_int": 9,
+      "model": "Server-PT",
+      "uuid": "Server0",
+      "name": "Server0",
+      "power": true,
+      "supported_modules": [
+        "Linksys-WMP300N:../art/PhysicalView/gPTHostNM-1W.pngThe WMP300N module provides one 2.4GHz wireless interface suitable for connection to wireless networks. The module supports protocols that use Ethernet for LAN access.",
+        "PT-HOST-NM-1CE:../art/PhysicalView/gPTHostNM-1CE.pngThe PT-HOST-NM-1CE features a single Ethernet port that can connect a LAN backbone which can also support either six PRI connections to aggregate ISDN lines, or 24 synchronous/asynchronous ports.",
+        "PT-HOST-NM-1CFE:../art/PhysicalView/gPTHostNM-1CFE.pngThe PT-HOST-NM-1CFE Module provides one Fast-Ethernet interface for use with copper media. Ideal for a wide range of LAN applications, the Fast Ethernet network modules support many internetworking features and standards. Single port network modules offer autosensing 10/100BaseTX or 100BaseFX Ethernet. The TX (copper) version supports virtual LAN (VLAN) deployment.",
+        "PT-HOST-NM-1CGE:../art/PhysicalView/gPTHostNM-1CGE.pngThe single-port Cisco Gigabit Ethernet Network Module (part number PT-HOST-NM-1CGE) provides Gigabit Ethernet copper connectivity for access routers. The module is supported by the Cisco 2691, Cisco 3660, Cisco 3725, and Cisco 3745 series routers. This network module has one gigabit interface converter (GBIC) slot to carry any standard copper or optical Cisco GBIC.",
+        "PT-HOST-NM-1FFE:../art/PhysicalView/gPTHostNM-1FFE.pngThe PT-HOST-NM-1FFE Module provides one Fast-Ethernet interface for use with multi mode fiber media. Ideal for a wide range of LAN applications, the Fast Ethernet network modules support many internetworking features and standards. Single port network modules offer autosensing 10/100BaseTX or 100BaseFX Ethernet.",
+        "PT-HOST-NM-1FFE-SM:../art/PhysicalView/gPTHostNM-SMF.pngThe PT-HOST-NM-1FFE-SM Module provides one Fast-Ethernet interface for use with single mode fiber media. Ideal for a wide range of LAN applications, the Fast Ethernet network modules support many internetworking features and standards. Single port network modules offer autosensing 10/100BaseTX or 100BaseFX Ethernet.",
+        "PT-HOST-NM-1FGE:../art/PhysicalView/gPTHostNM-1FGE.pngThe single-port Cisco Gigabit Ethernet Network Module (part number PT-HOST-NM-1FGE) provides Gigabit Ethernet optical connectivity for access routers. The module is supported by the Cisco 2691, Cisco 3660, Cisco 3725, and Cisco 3745 series routers. This network module has one gigabit interface converter (GBIC) slot to carry any standard copper or optical Cisco GBIC.",
+        "PT-HOST-NM-1FGE-SM:../art/PhysicalView/gPTHostNM-SMF.pngThe PT-HOST-NM-1FGE-SM Module provides one Gigabit-Ethernet interface for use with single mode fiber media. Ideal for a wide range of LAN applications, the Gigabit Ethernet network modules support many internetworking features and standards. Single port network modules offer autosensing 10/100BaseTX or 1000BaseFX Ethernet.",
+        "PT-HOST-NM-1W:../art/PhysicalView/gPTHostNM-1W.pngThe PT-HOST-NM-1W module provides one 2.4GHz wireless interface suitable for connection to wireless networks. The module supports protocols that use Ethernet for LAN access.",
+        "PT-HOST-NM-1W-A:../art/PhysicalView/gPTHostNM-1W.pngThe PT-HOST-NM-1W-A module provides one 5GHz wireless interface suitable for connection to wireless 802.11a networks. The module supports protocols that use Ethernet for LAN access.",
+        "PT-HOST-NM-1W-AC:../art/PhysicalView/gPTHostNM-1W.pngThe PT-HOST-NM-1W-AC module provides one 5 GHz wireless interface suitable for connection to wireless 802.11ac or 802.11b/g/n networks on the 2.4 GHz band. The module supports protocols that use Ethernet for LAN access.",
+        "PT-HOST-NM-3G/4G:../art/PhysicalView/gPTPcNM-3G4G.pngThe PT-HOST-NM-3G/4G module provides one cellular interface suitable for connection to 3G/4G networks.",
+        "PT-HOST-NM-5G:../art/PhysicalView/gPTPcNM-5G.pngThe PT-HOST-NM-5G module provides one cellular interface suitable for connection to 5G networks.",
+        "PT-HOST-NM-COVER:../art/PhysicalView/gPTHostNM-Cover.pngThe cover plate provides protection for the internal electronic components. It also helps maintain adequate cooling by normalizing airflow."
+      ],
+      "root_module": {
+        "module_name": "None",
+        "slot_path": "",
+        "module_type": 18,
+        "slot_count": 2,
+        "port_count": 0,
+        "children": [
+          {
+            "module_name": "None",
+            "slot_path": "",
+            "module_type": 7,
+            "slot_count": 0,
+            "port_count": 1,
+            "children": [],
+            "child_idx": 0
+          }
+        ],
+        "slot_types": [
+          7,
+          7
+        ]
+      },
+      "port_count_before": 1,
+      "port_names_before": [
+        "FastEthernet0"
+      ],
+      "device_methods_filtered": [
+        "addModule",
+        "getPower",
+        "getRootModule",
+        "getSupportedModule",
+        "removeModule",
+        "setPower"
+      ]
+    },
+    "IP_PHONE:7960": {
+      "type_int": 12,
+      "model": "7960",
+      "uuid": "IP Phone0",
+      "name": "IP Phone0",
+      "power": true,
+      "supported_modules": [
+        "IP_PHONE_POWER_ADAPTER:../art/PhysicalView/gPTIPPhone_PowerSupply.pngThe Cisco VoIP power adapter"
+      ],
+      "root_module": {
+        "module_name": "None",
+        "slot_path": "",
+        "module_type": 18,
+        "slot_count": 1,
+        "port_count": 0,
+        "children": [
+          {
+            "module_name": "None",
+            "slot_path": "",
+            "module_type": 18,
+            "slot_count": 1,
+            "port_count": 2,
+            "children": [],
+            "slot_types": [
+              11
+            ],
+            "child_idx": 0
+          }
+        ],
+        "slot_types": [
+          18
+        ]
+      },
+      "port_count_before": 3,
+      "port_names_before": [
+        "Vlan1",
+        "Switch",
+        "PC"
+      ],
+      "device_methods_filtered": [
+        "addModule",
+        "getPower",
+        "getRootModule",
+        "getSupportedModule",
+        "removeModule",
+        "setPower"
+      ]
+    },
+    "AP:AccessPoint-PT": {
+      "type_int": 7,
+      "model": "AccessPoint-PT",
+      "uuid": "Access Point0",
+      "name": "Access Point0",
+      "power": true,
+      "supported_modules": [
+        "PT-REPEATER-NM-1CE:../art/PhysicalView/gPTRepeaterNM-1CE.pngThe PT-REPEATER-NM-1CE features a single Ethernet port that can connect a LAN backbone which can also support either six PRI connections to aggregate ISDN lines, or 24 synchronous/asynchronous ports.",
+        "PT-REPEATER-NM-1CFE:../art/PhysicalView/gPTRepeaterNM-1CFE.pngThe PT-REPEATER-NM-1CFE Module provides one Fast-Ethernet interface for use with copper media. Ideal for a wide range of LAN applications, the Fast Ethernet network modules support many internetworking features and standards. Single port network modules offer autosensing 10/100BaseTX or 100BaseFX Ethernet. The TX (copper) version supports virtual LAN (VLAN) deployment.",
+        "PT-REPEATER-NM-1CGE:../art/PhysicalView/gPTRepeaterNM-1CGE.pngThe single-port Cisco Gigabit Ethernet Network Module (part number PT-REPEATER-NM-1CGE) provides Gigabit Ethernet copper connectivity for access routers. The module is supported by the Cisco 2691, Cisco 3660, Cisco 3725, and Cisco 3745 series routers. This network module has one gigabit interface converter (GBIC) slot to carry any standard copper or optical Cisco GBIC.",
+        "PT-REPEATER-NM-1FFE:../art/PhysicalView/gPTRepeaterNM-1FFE.pngThe PT-REPEATER-NM-1FFE Module provides one Fast-Ethernet interface for use with multi mode fiber media. Ideal for a wide range of LAN applications, the Fast Ethernet network modules support many internetworking features and standards. Single port network modules offer autosensing 10/100BaseTX or 100BaseFX Ethernet.",
+        "PT-REPEATER-NM-1FFE-SM:../art/PhysicalView/gPTRepeaterNM-1FFE-SM.pngThe PT-REPEATER-NM-1FFE-SM Module provides one Fast-Ethernet interface for use with single mode fiber media. Ideal for a wide range of LAN applications, the Fast Ethernet network modules support many internetworking features and standards. Single port network modules offer autosensing 10/100BaseTX or 100BaseFX Ethernet.",
+        "PT-REPEATER-NM-1FGE:../art/PhysicalView/gPTRepeaterNM-1FGE.pngThe single-port Cisco Gigabit Ethernet Network Module (part number PT-REPEATER-NM-1FGE) provides Gigabit Ethernet optical connectivity for access routers. The module is supported by the Cisco 2691, Cisco 3660, Cisco 3725, and Cisco 3745 series routers. This network module has one gigabit interface converter (GBIC) slot to carry any standard copper or optical Cisco GBIC.",
+        "PT-REPEATER-NM-1FGE-SM:../art/PhysicalView/gPTRepeaterNM-1FFE-SM.pngThe PT-REPEATER-NM-1FGE-SM Module provides one Gigabit-Ethernet interface for use with single mode fiber media. Ideal for a wide range of LAN applications, the Gigabit Ethernet network modules support many internetworking features and standards. Single port network modules offer autosensing 10/100BaseTX or 1000BaseFX Ethernet.",
+        "PT-REPEATER-NM-COVER:../art/PhysicalView/gPTRepeaterNM-Cover.pngThe cover plate provides protection for the internal electronic components. It also helps maintain adequate cooling by normalizing airflow."
+      ],
+      "root_module": {
+        "module_name": "None",
+        "slot_path": "",
+        "module_type": 18,
+        "slot_count": 2,
+        "port_count": 0,
+        "children": [
+          {
+            "module_name": "None",
+            "slot_path": "",
+            "module_type": 6,
+            "slot_count": 0,
+            "port_count": 1,
+            "children": [],
+            "child_idx": 0
+          },
+          {
+            "module_name": "None",
+            "slot_path": "",
+            "module_type": 18,
+            "slot_count": 0,
+            "port_count": 1,
+            "children": [],
+            "child_idx": 1
+          }
+        ],
+        "slot_types": [
+          6,
+          18
+        ]
+      },
+      "port_count_before": 2,
+      "port_names_before": [
+        "Port 0",
+        "Port 1"
+      ],
+      "device_methods_filtered": [
+        "addModule",
+        "getPower",
+        "getRootModule",
+        "getSupportedModule",
+        "removeModule",
+        "setPower"
+      ]
+    },
+    "DSL_MODEM:DSL-Modem-PT": {
+      "type_int": 13,
+      "model": "DSL-Modem-PT",
+      "uuid": "DSL Modem0",
+      "name": "DSL Modem0",
+      "power": true,
+      "supported_modules": [
+        "PT-MODEM-NM-1CE:../art/PhysicalView/gPTRepeaterNM-1CE.pngThe PT-MODEM-NM-1CE features a single Ethernet port that can connect a LAN backbone which can also support either six PRI connections to aggregate ISDN lines, or 24 synchronous/asynchronous ports.",
+        "PT-MODEM-NM-1CFE:../art/PhysicalView/gPTRepeaterNM-1CFE.pngThe PT-MODEM-NM-1CFE Module provides one Fast-Ethernet interface for use with copper media. Ideal for a wide range of LAN applications, the Fast Ethernet network modules support many internetworking features and standards. Single port network modules offer autosensing 10/100BaseTX or 100BaseFX Ethernet. The TX (copper) version supports virtual LAN (VLAN) deployment.",
+        "PT-MODEM-NM-1CGE:../art/PhysicalView/gPTRepeaterNM-1CGE.pngThe single-port Cisco Gigabit Ethernet Network Module (part number PT-MODEM-NM-1CGE) provides Gigabit Ethernet copper connectivity for access routers. The module is supported by the Cisco 2691, Cisco 3660, Cisco 3725, and Cisco 3745 series routers. This network module has one gigabit interface converter (GBIC) slot to carry any standard copper or optical Cisco GBIC."
+      ],
+      "root_module": {
+        "module_name": "None",
+        "slot_path": "",
+        "module_type": 18,
+        "slot_count": 2,
+        "port_count": 0,
+        "children": [
+          {
+            "module_name": "None",
+            "slot_path": "",
+            "module_type": 18,
+            "slot_count": 0,
+            "port_count": 1,
+            "children": [],
+            "child_idx": 0
+          },
+          {
+            "module_name": "None",
+            "slot_path": "",
+            "module_type": 8,
+            "slot_count": 0,
+            "port_count": 1,
+            "children": [],
+            "child_idx": 1
+          }
+        ],
+        "slot_types": [
+          18,
+          8
+        ]
+      },
+      "port_count_before": 2,
+      "port_names_before": [
+        "Port 0",
+        "Port 1"
+      ],
+      "device_methods_filtered": [
+        "addModule",
+        "getPower",
+        "getRootModule",
+        "getSupportedModule",
+        "removeModule",
+        "setPower"
+      ]
+    },
+    "CABLE_MODEM:Cable-Modem-PT": {
+      "type_int": 14,
+      "model": "Cable-Modem-PT",
+      "uuid": "Cable Modem0",
+      "name": "Cable Modem0",
+      "power": true,
+      "supported_modules": [
+        "PT-MODEM-NM-1CE:../art/PhysicalView/gPTRepeaterNM-1CE.pngThe PT-MODEM-NM-1CE features a single Ethernet port that can connect a LAN backbone which can also support either six PRI connections to aggregate ISDN lines, or 24 synchronous/asynchronous ports.",
+        "PT-MODEM-NM-1CFE:../art/PhysicalView/gPTRepeaterNM-1CFE.pngThe PT-MODEM-NM-1CFE Module provides one Fast-Ethernet interface for use with copper media. Ideal for a wide range of LAN applications, the Fast Ethernet network modules support many internetworking features and standards. Single port network modules offer autosensing 10/100BaseTX or 100BaseFX Ethernet. The TX (copper) version supports virtual LAN (VLAN) deployment.",
+        "PT-MODEM-NM-1CGE:../art/PhysicalView/gPTRepeaterNM-1CGE.pngThe single-port Cisco Gigabit Ethernet Network Module (part number PT-MODEM-NM-1CGE) provides Gigabit Ethernet copper connectivity for access routers. The module is supported by the Cisco 2691, Cisco 3660, Cisco 3725, and Cisco 3745 series routers. This network module has one gigabit interface converter (GBIC) slot to carry any standard copper or optical Cisco GBIC."
+      ],
+      "root_module": {
+        "module_name": "None",
+        "slot_path": "",
+        "module_type": 18,
+        "slot_count": 2,
+        "port_count": 0,
+        "children": [
+          {
+            "module_name": "None",
+            "slot_path": "",
+            "module_type": 18,
+            "slot_count": 0,
+            "port_count": 1,
+            "children": [],
+            "child_idx": 0
+          },
+          {
+            "module_name": "None",
+            "slot_path": "",
+            "module_type": 8,
+            "slot_count": 0,
+            "port_count": 1,
+            "children": [],
+            "child_idx": 1
+          }
+        ],
+        "slot_types": [
+          18,
+          8
+        ]
+      },
+      "port_count_before": 2,
+      "port_names_before": [
+        "Port 0",
+        "Port 1"
+      ],
+      "device_methods_filtered": [
+        "addModule",
+        "getPower",
+        "getRootModule",
+        "getSupportedModule",
+        "removeModule",
+        "setPower"
+      ]
+    },
+    "ASA:5506-X": {
+      "type_int": 27,
+      "model": "5506-X",
+      "uuid": "ASA0",
+      "name": "ASA0",
+      "power": true,
+      "supported_modules": [
+        "ASA-Cover:../art/PhysicalView/ASACover.pngThe ASA cover plate provides protection for the internal electronic components. It also helps maintain adequate cooling by normalizing airflow."
+      ],
+      "root_module": {
+        "module_name": "None",
+        "slot_path": "",
+        "module_type": 18,
+        "slot_count": 2,
+        "port_count": 0,
+        "children": [
+          {
+            "module_name": "None",
+            "slot_path": "",
+            "module_type": 18,
+            "slot_count": 0,
+            "port_count": 9,
+            "children": [],
+            "child_idx": 1
+          }
+        ],
+        "slot_types": [
+          18,
+          18
+        ]
+      },
+      "port_count_before": 9,
+      "port_names_before": [
+        "GigabitEthernet1/1",
+        "GigabitEthernet1/2",
+        "GigabitEthernet1/3",
+        "GigabitEthernet1/4",
+        "GigabitEthernet1/5",
+        "GigabitEthernet1/6",
+        "GigabitEthernet1/7",
+        "GigabitEthernet1/8",
+        "Management1/1"
+      ],
+      "device_methods_filtered": [
+        "addModule",
+        "getPower",
+        "getRootModule",
+        "getSupportedModule",
+        "removeModule",
+        "setPower"
+      ]
+    }
+  },
+  "install_trials": [
+    {
+      "label": "ROUTER:2811",
+      "model": "WIC-1T",
+      "ok": false,
+      "error": null,
+      "port_count_after": 3,
+      "new_port_names": []
+    },
+    {
+      "label": "PC:PC-PT",
+      "model": "Linksys-WMP300N",
+      "ok": false,
+      "error": null,
+      "port_count_after": 2,
+      "new_port_names": []
+    }
+  ],
+  "power_trials": [
+    {
+      "label": "ROUTER:2811",
+      "before": true,
+      "after_off": false,
+      "after_on": true
+    },
+    {
+      "label": "PC:PC-PT",
+      "before": true,
+      "after_off": false,
+      "after_on": true
+    },
+    {
+      "label": "LAPTOP:Laptop-PT",
+      "before": true,
+      "after_off": false,
+      "after_on": true
+    },
+    {
+      "label": "SERVER:Server-PT",
+      "before": true,
+      "after_off": false,
+      "after_on": true
+    },
+    {
+      "label": "IP_PHONE:7960",
+      "before": true,
+      "after_off": false,
+      "after_on": true
+    }
+  ],
+  "host_port_power": {
+    "phone": {
+      "Vlan1": {
+        "has_getPower": true,
+        "has_isPowerOn": true,
+        "has_setPower": true,
+        "getPower": false,
+        "isPowerOn": false
+      },
+      "Switch": {
+        "has_getPower": true,
+        "has_isPowerOn": true,
+        "has_setPower": true,
+        "getPower": true,
+        "isPowerOn": true
+      },
+      "PC": {
+        "has_getPower": true,
+        "has_isPowerOn": true,
+        "has_setPower": true,
+        "getPower": true,
+        "isPowerOn": true
+      }
+    },
+    "pc": {
+      "FastEthernet0": {
+        "has_getPower": true,
+        "has_isPowerOn": true,
+        "has_setPower": true,
+        "getPower": true,
+        "isPowerOn": true
+      },
+      "Bluetooth": {
+        "has_getPower": true,
+        "has_isPowerOn": true,
+        "has_setPower": true,
+        "getPower": false,
+        "isPowerOn": false
+      }
+    }
+  },
+  "errors": [
+    "ROUTER:2811 cleanup deleteDevice: TypeError: Property 'deleteDevice' of object [object Object] is not a function",
+    "ROUTER:2911 cleanup deleteDevice: TypeError: Property 'deleteDevice' of object [object Object] is not a function",
+    "ROUTER:1841 cleanup deleteDevice: TypeError: Property 'deleteDevice' of object [object Object] is not a function",
+    "ROUTER:ISR4321 cleanup deleteDevice: TypeError: Property 'deleteDevice' of object [object Object] is not a function",
+    "SWITCH:2960-24TT cleanup deleteDevice: TypeError: Property 'deleteDevice' of object [object Object] is not a function",
+    "MLS:3560-24PS cleanup deleteDevice: TypeError: Property 'deleteDevice' of object [object Object] is not a function",
+    "PC:PC-PT cleanup deleteDevice: TypeError: Property 'deleteDevice' of object [object Object] is not a function",
+    "LAPTOP:Laptop-PT cleanup deleteDevice: TypeError: Property 'deleteDevice' of object [object Object] is not a function",
+    "SERVER:Server-PT cleanup deleteDevice: TypeError: Property 'deleteDevice' of object [object Object] is not a function",
+    "IP_PHONE:7960 cleanup deleteDevice: TypeError: Property 'deleteDevice' of object [object Object] is not a function",
+    "AP:AccessPoint-PT cleanup deleteDevice: TypeError: Property 'deleteDevice' of object [object Object] is not a function",
+    "DSL_MODEM:DSL-Modem-PT cleanup deleteDevice: TypeError: Property 'deleteDevice' of object [object Object] is not a function",
+    "CABLE_MODEM:Cable-Modem-PT cleanup deleteDevice: TypeError: Property 'deleteDevice' of object [object Object] is not a function",
+    "ASA:5506-X cleanup deleteDevice: TypeError: Property 'deleteDevice' of object [object Object] is not a function"
+  ]
+}

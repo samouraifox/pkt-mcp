@@ -603,6 +603,124 @@ def save_pkt(path: str) -> dict:
     return _call(_bridge.save, path)
 
 
+# ── phase 5.1: module install + device power ───────────────────────────
+
+
+@mcp.tool()
+def add_module(
+    device: str,
+    module_model: str,
+    slot: int | None = None,
+    container: str = "chassis",
+    replace_existing: bool = False,
+) -> dict:
+    """Install a hardware module into one of a device's Module slots, then
+    return the newly-exposed port names.
+
+    PT 9 models devices as a tree of `Module`s. Most devices ship with a
+    fixed default chassis — to get serial WAN ports on a 2811, a wireless
+    NIC on a PC, or a power adapter on a 7960 phone, you have to install
+    the module first. After install, the new ports are immediately usable
+    with `connect` / `configure_interface`.
+
+    Args:
+        device: Device name (as set in add_device).
+        module_model: PT module model string. Confirmed working values
+                      (per docs/phase5.1-module-api.md):
+                        Serial WAN modules (container="chassis"):
+                          "WIC-1T"     — 1-port serial on 2811/1841.
+                          "WIC-2T"     — 2-port serial on 2811/1841.
+                          "HWIC-2T"    — 2-port serial on 2911.
+                          "NIM-2T"     — 2-port serial on ISR4321/4331.
+                        Wireless NICs (container="root", replace
+                          default placeholder with replace_existing=True):
+                          "Linksys-WMP300N"  — PC/Server wireless NIC.
+                          "Linksys-WPC300N"  — Laptop wireless NIC.
+                        Power adapters (container="chassis"):
+                          "IP_PHONE_POWER_ADAPTER" — required for 7960
+                            to participate in CME voice. (Note: PT does
+                            NOT create a new port for power adapters;
+                            new_ports will be [].)
+                      Other 199 catalog entries exist (NM-1E, HWIC-4ESW,
+                      GLC-LH-SMD, PT-HOST-NM-1W-AC, etc.) — see
+                      docs/phase5.1-module-api.md M2 for the full list.
+        slot: Slot index in the chosen container, or None to auto-pick
+              the first empty slot. Auto-pick CANNOT displace a default
+              placeholder (PC/Laptop wireless slot 0 ships with one) —
+              pass an explicit slot + replace_existing=True for that.
+        container: "chassis" (default) or "root".
+                   "chassis" = root.getModuleAt(0) — where WIC/HWIC/NIM
+                     slots live for routers and where the phone power
+                     adapter slot lives for 7960.
+                   "root"   = the device's root Module — where the
+                     wireless NIC slot lives for PC/Laptop/Server.
+        replace_existing: If the chosen slot is occupied, refuse with
+                          PT_REJECTED unless this is True. When True,
+                          the occupant is removeModuleAt'd before
+                          installing the new module. Used for the
+                          PC/Laptop wireless slot, which ships with a
+                          default placeholder that must be removed first.
+
+    Returns: {"ok": true, "device": <name>, "module_model": <model>,
+              "container": "chassis"|"root", "slot": <int>,
+              "new_ports": [<port name>, ...],
+              "replaced_module": <name>|null}.
+
+    Raises PT_REJECTED with `hint` in error_data when:
+        - slot occupied and replace_existing was false (data.occupant
+          carries the existing module's name);
+        - all slots in the container are full;
+        - addModuleAt returned false (the model isn't valid for that
+          slot's type — data.slot_type carries the int, look it up in
+          the ModuleType table in docs/phase5.1-module-api.md M1).
+
+    Examples:
+        add_module("R1", "WIC-1T")
+          → installs in first empty chassis slot, exposes Serial0/0/0.
+        add_module("R1", "WIC-2T", slot=1)
+          → installs in chassis slot 1, exposes Serial0/1/0 and 0/1/1.
+        add_module("PC1", "Linksys-WMP300N", container="root", slot=0,
+                   replace_existing=True)
+          → displaces the default PT-HOST-NM-COVER, exposes Wireless0.
+        add_module("PHONE1", "IP_PHONE_POWER_ADAPTER")
+          → installs the power adapter so the phone can register with
+            CME. new_ports is [] (power adapters add no port)."""
+    return _call(
+        _bridge.add_module,
+        device=device,
+        module_model=module_model,
+        slot=slot,
+        container=container,
+        replace_existing=replace_existing,
+    )
+
+
+@mcp.tool()
+def power_device(device: str, on: bool) -> dict:
+    """Set the chassis power state of a device via Device.setPower(bool),
+    then read it back via getPower().
+
+    PT models a chassis-level power switch separately from the running
+    config — turning power off "unplugs" the device from the simulation
+    without removing it from the canvas. Useful for HA failover demos,
+    power-cycling a misbehaving CME phone, or modeling a device that's
+    administratively off-line.
+
+    Args:
+        device: Device name.
+        on: True to power on, False to power off.
+
+    Returns: {"ok": true, "device": <name>, "power": <observed bool>}.
+    `power` is the value getPower() returns after setPower — should
+    match `on` unless PT rejected the change silently.
+
+    Note: PT devices default to powered-on after add_device, so an
+    explicit power_device(.., on=True) is usually a no-op. The common
+    use case is power_device(..., on=False) followed later by
+    power_device(..., on=True) to model a reboot."""
+    return _call(_bridge.power_device, device=device, on=on)
+
+
 # ── ergonomic helpers ────────────────────────────────────────────────────
 
 

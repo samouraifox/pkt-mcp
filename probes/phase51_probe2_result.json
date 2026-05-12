@@ -1,0 +1,572 @@
+{
+  "timestamp": "2026-05-12T13:14:22.068Z",
+  "delete_method": [
+    "deleteLink",
+    "removeCanvasItem",
+    "removeCluster",
+    "removeDevice",
+    "removeRemoteNetwork",
+    "removeTextPopup"
+  ],
+  "install_trials": [
+    {
+      "label": "2811_WIC-1T",
+      "device_model": "2811",
+      "module_model": "WIC-1T",
+      "container": "child0",
+      "removed_default_at": null,
+      "before": {
+        "ports": [
+          "Vlan1",
+          "FastEthernet0/0",
+          "FastEthernet0/1"
+        ],
+        "container_slots": [
+          {
+            "slot": 0,
+            "slot_type": 2,
+            "child": null
+          },
+          {
+            "slot": 1,
+            "slot_type": 2,
+            "child": null
+          },
+          {
+            "slot": 2,
+            "slot_type": 2,
+            "child": null
+          },
+          {
+            "slot": 3,
+            "slot_type": 2,
+            "child": null
+          }
+        ]
+      },
+      "chose_slot": 0,
+      "ok": true,
+      "after": {
+        "ports": [
+          "Vlan1",
+          "FastEthernet0/0",
+          "FastEthernet0/1",
+          "Serial0/0/0"
+        ],
+        "container_slots": [
+          {
+            "slot": 0,
+            "slot_type": 2,
+            "child": {
+              "slot_path": "0/0",
+              "module_type": 2,
+              "port_count": 1
+            }
+          },
+          {
+            "slot": 1,
+            "slot_type": 2,
+            "child": null
+          },
+          {
+            "slot": 2,
+            "slot_type": 2,
+            "child": null
+          },
+          {
+            "slot": 3,
+            "slot_type": 2,
+            "child": null
+          }
+        ]
+      },
+      "new_ports": [
+        "Serial0/0/0"
+      ],
+      "uuid_deleted_via": "removeDevice(uuid)",
+      "errors": [],
+      "after_remove_ports": [
+        "Vlan1",
+        "FastEthernet0/0",
+        "FastEthernet0/1"
+      ]
+    },
+    {
+      "label": "2811_WIC-2T",
+      "device_model": "2811",
+      "module_model": "WIC-2T",
+      "container": "child0",
+      "removed_default_at": null,
+      "before": {
+        "ports": [
+          "Vlan1",
+          "FastEthernet0/0",
+          "FastEthernet0/1"
+        ],
+        "container_slots": [
+          {
+            "slot": 0,
+            "slot_type": 2,
+            "child": null
+          },
+          {
+            "slot": 1,
+            "slot_type": 2,
+            "child": null
+          },
+          {
+            "slot": 2,
+            "slot_type": 2,
+            "child": null
+          },
+          {
+            "slot": 3,
+            "slot_type": 2,
+            "child": null
+          }
+        ]
+      },
+      "chose_slot": 0,
+      "ok": true,
+      "after": {
+        "ports": [
+          "Vlan1",
+          "FastEthernet0/0",
+          "FastEthernet0/1",
+          "Serial0/0/0",
+          "Serial0/0/1"
+        ],
+        "container_slots": [
+          {
+            "slot": 0,
+            "slot_type": 2,
+            "child": {
+              "slot_path": "0/0",
+              "module_type": 2,
+              "port_count": 2
+            }
+          },
+          {
+            "slot": 1,
+            "slot_type": 2,
+            "child": null
+          },
+          {
+            "slot": 2,
+            "slot_type": 2,
+            "child": null
+          },
+          {
+            "slot": 3,
+            "slot_type": 2,
+            "child": null
+          }
+        ]
+      },
+      "new_ports": [
+        "Serial0/0/0",
+        "Serial0/0/1"
+      ],
+      "uuid_deleted_via": "removeDevice(uuid)",
+      "errors": []
+    },
+    {
+      "label": "2911_HWIC-2T",
+      "device_model": "2911",
+      "module_model": "HWIC-2T",
+      "container": "child0",
+      "removed_default_at": null,
+      "before": {
+        "ports": [
+          "Vlan1",
+          "GigabitEthernet0/0",
+          "GigabitEthernet0/1",
+          "GigabitEthernet0/2"
+        ],
+        "container_slots": [
+          {
+            "slot": 0,
+            "slot_type": 2,
+            "child": null
+          },
+          {
+            "slot": 1,
+            "slot_type": 2,
+            "child": null
+          },
+          {
+            "slot": 2,
+            "slot_type": 2,
+            "child": null
+          },
+          {
+            "slot": 3,
+            "slot_type": 2,
+            "child": null
+          }
+        ]
+      },
+      "chose_slot": 0,
+      "ok": true,
+      "after": {
+        "ports": [
+          "Vlan1",
+          "GigabitEthernet0/0",
+          "GigabitEthernet0/1",
+          "GigabitEthernet0/2",
+          "Serial0/0/0",
+          "Serial0/0/1"
+        ],
+        "container_slots": [
+          {
+            "slot": 0,
+            "slot_type": 2,
+            "child": {
+              "slot_path": "0/0",
+              "module_type": 2,
+              "port_count": 2
+            }
+          },
+          {
+            "slot": 1,
+            "slot_type": 2,
+            "child": null
+          },
+          {
+            "slot": 2,
+            "slot_type": 2,
+            "child": null
+          },
+          {
+            "slot": 3,
+            "slot_type": 2,
+            "child": null
+          }
+        ]
+      },
+      "new_ports": [
+        "Serial0/0/0",
+        "Serial0/0/1"
+      ],
+      "uuid_deleted_via": "removeDevice(uuid)",
+      "errors": []
+    },
+    {
+      "label": "ISR4321_NIM-2T",
+      "device_model": "ISR4321",
+      "module_model": "NIM-2T",
+      "container": "child0",
+      "removed_default_at": null,
+      "before": {
+        "ports": [
+          "Vlan1",
+          "GigabitEthernet0/0/0",
+          "GigabitEthernet0/0/1"
+        ],
+        "container_slots": [
+          {
+            "slot": 0,
+            "slot_type": 32,
+            "child": {
+              "slot_path": "",
+              "module_type": 32,
+              "port_count": 2
+            }
+          },
+          {
+            "slot": 1,
+            "slot_type": 2,
+            "child": null
+          },
+          {
+            "slot": 2,
+            "slot_type": 2,
+            "child": null
+          }
+        ]
+      },
+      "chose_slot": 1,
+      "ok": true,
+      "after": {
+        "ports": [
+          "Vlan1",
+          "GigabitEthernet0/0/0",
+          "GigabitEthernet0/0/1",
+          "Serial0/1/0",
+          "Serial0/1/1"
+        ],
+        "container_slots": [
+          {
+            "slot": 0,
+            "slot_type": 32,
+            "child": {
+              "slot_path": "",
+              "module_type": 32,
+              "port_count": 2
+            }
+          },
+          {
+            "slot": 1,
+            "slot_type": 2,
+            "child": {
+              "slot_path": "0/1",
+              "module_type": 2,
+              "port_count": 2
+            }
+          },
+          {
+            "slot": 2,
+            "slot_type": 2,
+            "child": null
+          }
+        ]
+      },
+      "new_ports": [
+        "Serial0/1/0",
+        "Serial0/1/1"
+      ],
+      "uuid_deleted_via": "removeDevice(uuid)",
+      "errors": []
+    },
+    {
+      "label": "PC_WMP300N",
+      "device_model": "PC-PT",
+      "module_model": "Linksys-WMP300N",
+      "container": "root",
+      "removed_default_at": 0,
+      "before": {
+        "ports": [
+          "FastEthernet0",
+          "Bluetooth"
+        ],
+        "container_slots": [
+          {
+            "slot": 0,
+            "slot_type": 7,
+            "child": {
+              "slot_path": "",
+              "module_type": 7,
+              "port_count": 1
+            }
+          },
+          {
+            "slot": 1,
+            "slot_type": 18,
+            "child": {
+              "slot_path": "",
+              "module_type": 18,
+              "port_count": 0
+            }
+          }
+        ]
+      },
+      "chose_slot": 0,
+      "ok": true,
+      "after": {
+        "ports": [
+          "Bluetooth",
+          "Wireless0"
+        ],
+        "container_slots": [
+          {
+            "slot": 0,
+            "slot_type": 7,
+            "child": {
+              "slot_path": "0",
+              "module_type": 7,
+              "port_count": 1
+            }
+          },
+          {
+            "slot": 1,
+            "slot_type": 18,
+            "child": {
+              "slot_path": "",
+              "module_type": 18,
+              "port_count": 0
+            }
+          }
+        ]
+      },
+      "new_ports": [
+        "Wireless0"
+      ],
+      "uuid_deleted_via": "removeDevice(uuid)",
+      "errors": []
+    },
+    {
+      "label": "Laptop_WPC300N",
+      "device_model": "Laptop-PT",
+      "module_model": "Linksys-WPC300N",
+      "container": "root",
+      "removed_default_at": 0,
+      "before": {
+        "ports": [
+          "FastEthernet0",
+          "Bluetooth"
+        ],
+        "container_slots": [
+          {
+            "slot": 0,
+            "slot_type": 9,
+            "child": {
+              "slot_path": "",
+              "module_type": 9,
+              "port_count": 1
+            }
+          },
+          {
+            "slot": 1,
+            "slot_type": 18,
+            "child": {
+              "slot_path": "",
+              "module_type": 18,
+              "port_count": 0
+            }
+          }
+        ]
+      },
+      "chose_slot": 0,
+      "ok": true,
+      "after": {
+        "ports": [
+          "Bluetooth",
+          "Wireless0"
+        ],
+        "container_slots": [
+          {
+            "slot": 0,
+            "slot_type": 9,
+            "child": {
+              "slot_path": "0",
+              "module_type": 9,
+              "port_count": 1
+            }
+          },
+          {
+            "slot": 1,
+            "slot_type": 18,
+            "child": {
+              "slot_path": "",
+              "module_type": 18,
+              "port_count": 0
+            }
+          }
+        ]
+      },
+      "new_ports": [
+        "Wireless0"
+      ],
+      "uuid_deleted_via": "removeDevice(uuid)",
+      "errors": []
+    },
+    {
+      "label": "Phone_PowerAdapter",
+      "device_model": "7960",
+      "module_model": "IP_PHONE_POWER_ADAPTER",
+      "container": "child0",
+      "removed_default_at": null,
+      "before": {
+        "ports": [
+          "Vlan1",
+          "Switch",
+          "PC"
+        ],
+        "container_slots": [
+          {
+            "slot": 0,
+            "slot_type": 11,
+            "child": null
+          }
+        ]
+      },
+      "chose_slot": 0,
+      "ok": true,
+      "after": {
+        "ports": [
+          "Vlan1",
+          "Switch",
+          "PC"
+        ],
+        "container_slots": [
+          {
+            "slot": 0,
+            "slot_type": 11,
+            "child": {
+              "slot_path": "0/0",
+              "module_type": 11,
+              "port_count": 0
+            }
+          }
+        ]
+      },
+      "new_ports": [],
+      "uuid_deleted_via": "removeDevice(uuid)",
+      "errors": []
+    },
+    {
+      "label": "AP_PowerAdapter",
+      "device_model": "AccessPoint-PT",
+      "module_model": "ACCESS_POINT_POWER_ADAPTER",
+      "container": "root",
+      "removed_default_at": null,
+      "before": {
+        "ports": [
+          "Port 0",
+          "Port 1"
+        ],
+        "container_slots": [
+          {
+            "slot": 0,
+            "slot_type": 6,
+            "child": {
+              "slot_path": "",
+              "module_type": 6,
+              "port_count": 1
+            }
+          },
+          {
+            "slot": 1,
+            "slot_type": 18,
+            "child": {
+              "slot_path": "",
+              "module_type": 18,
+              "port_count": 1
+            }
+          }
+        ]
+      },
+      "ok": false,
+      "after": {
+        "ports": [
+          "Port 0",
+          "Port 1"
+        ],
+        "container_slots": [
+          {
+            "slot": 0,
+            "slot_type": 6,
+            "child": {
+              "slot_path": "",
+              "module_type": 6,
+              "port_count": 1
+            }
+          },
+          {
+            "slot": 1,
+            "slot_type": 18,
+            "child": {
+              "slot_path": "",
+              "module_type": 18,
+              "port_count": 1
+            }
+          }
+        ]
+      },
+      "new_ports": [],
+      "uuid_deleted_via": "removeDevice(uuid)",
+      "errors": []
+    }
+  ],
+  "errors": []
+}

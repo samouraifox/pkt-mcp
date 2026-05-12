@@ -395,6 +395,45 @@ class Bridge:
         without trashing whatever workspace the user has open."""
         return self.call("save", {"path": path})
 
+    # ── phase 5.1: module install + device power ────────────────────────
+
+    def add_module(self, device: str, module_model: str, *,
+                   slot: int | None = None,
+                   container: str = "chassis",
+                   replace_existing: bool = False) -> dict:
+        """Install a Module into a device slot. Returns {ok, device,
+        module_model, container, slot, new_ports, replaced_module}.
+
+        container:
+            "chassis" (default) — install into root.getModuleAt(0). This
+                                  is where WIC/HWIC/NIM slots live on
+                                  routers and where the phone power
+                                  adapter slot lives on 7960.
+            "root"              — install directly into the device's
+                                  root Module. This is where the
+                                  wireless NIC slot lives on PC/Laptop.
+
+        slot: int or None. If int, target that exact slot index. If None,
+              pick the first empty slot in the container. To displace a
+              default placeholder (PC/Laptop wireless slot ships with
+              one), pass an explicit slot + replace_existing=True.
+
+        Raises PtRejected with hint when the slot is occupied without
+        replace_existing, when addModuleAt returns false (wrong slot type
+        for this module model), or when no empty slot exists."""
+        return self.call("add_module", {
+            "device": device,
+            "module_model": module_model,
+            "slot": slot,
+            "container": container,
+            "replace_existing": replace_existing,
+        })
+
+    def power_device(self, device: str, on: bool) -> dict:
+        """Device.setPower(bool) round-trip. Returns {ok, device, power}
+        with power read back via getPower() after the set."""
+        return self.call("power_device", {"device": device, "on": on})
+
     # ── debug escape hatch ───────────────────────────────────────────────
 
     def raw(self, code: str) -> Any:

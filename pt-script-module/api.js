@@ -931,6 +931,183 @@ function op_save(args, done) {
     return DEFER;
 }
 
+// ─── phase 5.1: module install + device power ────────────────────────────
+
+// op_add_module(device, module_model, [slot], [container="chassis"],
+//               [replace_existing=false])
+//
+// Installs a Module into one of the device's Module slots. Two containers
+// are supported per phase5.1-module-api.md:
+//   - "chassis" (default): root.getModuleAt(0) — where WICs/HWICs/NIMs
+//     and phone power adapters live for routers and 7960.
+//   - "root":              the device's root Module directly — where the
+//     wireless NIC slot lives on PC/Laptop/Server.
+//
+// Slot picking:
+//   - If `slot` is given: use that exact slot index. If occupied, refuse
+//     with PT_REJECTED unless replace_existing=true (in which case the
+//     occupant is removeModuleAt'd first).
+//   - If `slot` is omitted: scan the container for the first EMPTY slot
+//     and use it. Caller can't displace a default placeholder this way —
+//     pass slot=N + replace_existing=true for that.
+function op_add_module(args) {
+    var deviceName   = requireArg(args, "device",       "string");
+    var moduleModel  = requireArg(args, "module_model", "string");
+    var container    = (args && args.container) || "chassis";
+    var slotArg      = (args && args.slot !== undefined && args.slot !== null) ? args.slot : null;
+    var replaceExisting = !!(args && args.replace_existing);
+
+    if (container !== "chassis" && container !== "root") {
+        throw err("BAD_ARGS",
+            "container must be 'chassis' or 'root', got: " + container);
+    }
+    if (slotArg !== null && typeof slotArg !== "number") {
+        throw err("BAD_ARGS", "slot must be a number, got " + typeof slotArg);
+    }
+
+    var dev = requireDevice(deviceName);
+    var rootModule = (typeof dev.getRootModule === "function") ? dev.getRootModule() : null;
+    if (!rootModule) {
+        throw err("INTERNAL", "device " + deviceName + " has no root module");
+    }
+
+    var targetContainer;
+    if (container === "root") {
+        targetContainer = rootModule;
+    } else {
+        // "chassis" → root.getModuleAt(0) — the chassis self-slot child.
+        try { targetContainer = rootModule.getModuleAt(0); }
+        catch (e) { throw err("INTERNAL", "rootModule.getModuleAt(0) threw: " + e); }
+        if (!targetContainer) {
+            throw err("PT_REJECTED",
+                "container 'chassis' resolved to null on " + deviceName +
+                " (root.getModuleAt(0) was empty — try container='root')");
+        }
+    }
+
+    function snapPortNames(d) {
+        var names = [];
+        try {
+            var pc = (typeof d.getPortCount === "function") ? d.getPortCount() : 0;
+            for (var i = 0; i < pc; i++) {
+                var p = d.getPortAt(i);
+                if (p) names.push(p.getName());
+            }
+        } catch (e) {}
+        return names;
+    }
+
+    var portsBefore = snapPortNames(dev);
+
+    // Pick the slot.
+    var chosenSlot;
+    var replacedModel = null;
+
+    if (slotArg !== null) {
+        chosenSlot = slotArg;
+        var existing = null;
+        try { existing = targetContainer.getModuleAt(chosenSlot); } catch (e) {}
+        if (existing) {
+            if (!replaceExisting) {
+                var existingModel = null;
+                try { existingModel = existing.getModuleNameAsString(); } catch (e) {}
+                throw err("PT_REJECTED",
+                    "slot " + chosenSlot + " already occupied on " + deviceName +
+                    " by " + (existingModel || "(unknown module)"),
+                    { occupant: existingModel,
+                      hint: "pass replace_existing=true to displace" });
+            }
+            try { replacedModel = existing.getModuleNameAsString(); } catch (e) {}
+            try { targetContainer.removeModuleAt(chosenSlot); }
+            catch (e) {
+                throw err("PT_REJECTED",
+                    "removeModuleAt(" + chosenSlot + ") for displaced module threw: " + e,
+                    { displaced: replacedModel });
+            }
+        }
+    } else {
+        var slotCount = 0;
+        try { slotCount = targetContainer.getSlotCount(); } catch (e) {}
+        for (var s = 0; s < slotCount; s++) {
+            var occ = null;
+            try { occ = targetContainer.getModuleAt(s); } catch (e) {}
+            if (!occ) { chosenSlot = s; break; }
+        }
+        if (chosenSlot === undefined) {
+            throw err("PT_REJECTED",
+                "no empty slot in container '" + container + "' on " + deviceName,
+                { slot_count: slotCount,
+                  hint: "all slots occupied — pass an explicit slot + replace_existing=true" });
+        }
+    }
+
+    // Install.
+    var ok = false;
+    try { ok = !!targetContainer.addModuleAt(moduleModel, chosenSlot); }
+    catch (e) {
+        throw err("PT_REJECTED",
+            "addModuleAt(" + moduleModel + ", " + chosenSlot + ") threw: " + e,
+            { device: deviceName, container: container, slot: chosenSlot });
+    }
+    if (!ok) {
+        var slotType = null;
+        try { slotType = targetContainer.getSlotTypeAt(chosenSlot); } catch (e) {}
+        throw err("PT_REJECTED",
+            "addModuleAt(" + moduleModel + ", " + chosenSlot + ") returned false",
+            { device: deviceName, container: container, slot: chosenSlot,
+              slot_type: slotType,
+              hint: "module model may not be valid for this slot type — " +
+                    "see phase5.1-module-api.md ModuleType table" });
+    }
+
+    // Diff ports to surface what the install exposed.
+    var portsAfter = snapPortNames(dev);
+    var beforeSet = {};
+    for (var i = 0; i < portsBefore.length; i++) beforeSet[portsBefore[i]] = true;
+    var newPorts = [];
+    for (var j = 0; j < portsAfter.length; j++) {
+        if (!beforeSet[portsAfter[j]]) newPorts.push(portsAfter[j]);
+    }
+
+    return {
+        ok: true,
+        device: deviceName,
+        module_model: moduleModel,
+        container: container,
+        slot: chosenSlot,
+        new_ports: newPorts,
+        replaced_module: replacedModel
+    };
+}
+
+// op_power_device(device, on) — Device.setPower(bool) round-trip.
+// Used for IP phones (7960 boots powered=true but the voice stack only
+// initialises after the IP_PHONE_POWER_ADAPTER is installed; setPower is
+// the second knob if needed), modems, and any device that needs to be
+// admin-down at the chassis level.
+function op_power_device(args) {
+    var name = requireArg(args, "device", "string");
+    var on   = requireArg(args, "on",     "boolean");
+    var dev  = requireDevice(name);
+
+    if (typeof dev.setPower !== "function") {
+        throw err("INTERNAL",
+            "device " + name + " has no setPower (PT version mismatch?)");
+    }
+
+    try { dev.setPower(on); }
+    catch (e) {
+        throw err("PT_REJECTED", "setPower(" + on + ") threw: " + e,
+            { device: name, requested: on });
+    }
+
+    var observed = null;
+    try { observed = (typeof dev.getPower === "function") ? dev.getPower() : null; }
+    catch (e) {}
+
+    return { ok: true, device: name, power: observed };
+}
+
 // ─── dispatch table ──────────────────────────────────────────────────────
 
 var DISPATCH = {
@@ -943,5 +1120,7 @@ var DISPATCH = {
     run_commands:        op_run_commands,
     list_devices:        op_list_devices,
     get_port_state:      op_get_port_state,
-    save:                op_save
+    save:                op_save,
+    add_module:          op_add_module,
+    power_device:        op_power_device
 };
