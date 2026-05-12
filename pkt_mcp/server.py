@@ -272,6 +272,46 @@ def add_device(type: str, name: str, model: str, x: float, y: float) -> dict:
 
 
 @mcp.tool()
+def add_devices(devices: list[dict]) -> dict:
+    """Place many devices on the canvas in a single MCP round-trip,
+    booting any IOS chassis (routers, switches, MLS, ASA) **in
+    parallel**. Phase 5.2's flagship throughput primitive.
+
+    For N routers, single-shot add_device serializes the System
+    Configuration Dialog handshake at ~30s per chassis (≈ N × 30s wall
+    clock). add_devices fans out: all addDevice() calls fire
+    synchronously, then N _bootWaitFor pollers run concurrently on
+    PT's event loop, completing in ~one boot window regardless of N
+    (≈ 30-45s for 6 routers in observed smokes).
+
+    Args:
+        devices: List of dicts, each shaped like:
+                   {"type": "ROUTER", "name": "R1", "model": "2811",
+                    "x": 100, "y": 100}
+                 The five fields are required and match `add_device`'s
+                 parameters exactly. See `add_device` for the list of
+                 supported types and their typical models.
+
+    Returns:
+        {"results": [<row>, ...]} aligned to the input order. Each row
+        is either {"ok": true, "uuid": "<...>", "name": "<...>"} on
+        success or {"error": {"type": "<code>", "message": "...",
+        "data": {...}}} on per-row failure (name collision, unknown
+        type, addDevice model rejection, boot timeout, etc.). A bad
+        row does NOT abort the others — every device that can be
+        placed will be.
+
+    Raises BAD_ARGS only on top-level shape errors (devices not a
+    list, empty list is fine). Per-row failures are returned, not
+    raised — inspect each row.
+
+    Tip: for mixed batches, place the non-IOS hosts (PC/Server/Hub)
+    alongside the routers — they return ok instantly and don't add to
+    the boot-window critical path."""
+    return _call(_bridge.add_devices, devices=devices)
+
+
+@mcp.tool()
 def delete_device(name: str) -> dict:
     """Remove a device from the canvas by name.
 
@@ -380,6 +420,35 @@ def connect(
         "auto_portfast_applied": portfast_target is not None,
         "portfast_target": portfast_target,
     }
+
+
+@mcp.tool()
+def connect_many(links: list[dict]) -> dict:
+    """Create many cables in a single MCP round-trip. Bulk variant of
+    `connect`.
+
+    Args:
+        links: List of dicts, each shaped like:
+                 {"dev_a": "R1", "port_a": "GigabitEthernet0/0",
+                  "dev_b": "SW1", "port_b": "FastEthernet0/1",
+                  "cable_type": "ETHERNET_STRAIGHT"}
+               All five fields are required. cable_type values match
+               `connect` (ETHERNET_STRAIGHT, ETHERNET_CROSS, SERIAL,
+               FIBER, AUTO, etc.).
+
+    Returns:
+        {"results": [<row>, ...]} aligned to the input order. Each row
+        is either {"ok": true} on success or {"error": {"type":
+        "<code>", "message": "...", "data": {...}}} on per-row failure
+        (port already linked, type/port mismatch, unknown device,
+        unknown cable_type). A bad row does NOT abort the others.
+
+    Note: auto_portfast is NOT applied here, unlike `connect` (the JS
+    layer doesn't have IOS CLI helpers). For switch↔host links that
+    need portfast, follow up with run_commands on each switch
+    (e.g. one run_commands per switch with all its access ports'
+    `interface ... / spanning-tree portfast` lines)."""
+    return _call(_bridge.connect_many, links=links)
 
 
 @mcp.tool()

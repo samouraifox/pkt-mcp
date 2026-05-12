@@ -229,6 +229,29 @@ class Bridge:
         self._device_types[name] = type
         return result
 
+    def add_devices(self, devices: list[dict]) -> dict:
+        """Bulk add. `devices` is a list of {type, name, model, x, y}
+        dicts. Returns {results: [...]} aligned to the input order; each
+        entry is either {ok, uuid, name} on success or {error: {type,
+        message, [data]}} on per-row failure (name collision, unknown
+        type, boot timeout, etc.). Successful rows are added to the
+        type cache for run_command auto-dispatch.
+
+        Single MCP round-trip. Internally, the JS handler issues all
+        addDevice calls synchronously and runs the IOS boot-waits
+        concurrently via setTimeout — so N routers boot in roughly one
+        ~30s window, not N × 30s.
+
+        Raises BadArgs only on top-level shape errors (devices not a
+        list); per-row errors are returned in the results array."""
+        result = self.call("add_devices", {"devices": devices})
+        for row, d in zip(result.get("results", []), devices):
+            if isinstance(row, dict) and row.get("ok"):
+                name = d.get("name")
+                if isinstance(name, str):
+                    self._device_types[name] = d["type"]
+        return result
+
     def delete_device(self, name: str) -> None:
         self.call("delete_device", {"name": name})
         self._device_types.pop(name, None)
@@ -240,6 +263,17 @@ class Bridge:
             "dev_b": dev_b, "port_b": port_b,
             "cable_type": cable_type,
         })
+
+    def connect_many(self, links: list[dict]) -> dict:
+        """Bulk connect. `links` is a list of {dev_a, port_a, dev_b,
+        port_b, cable_type} dicts. Returns {results: [...]} aligned to
+        the input order; each entry is either {ok: true} or {error:
+        {type, message, [data]}} per-row.
+
+        Single MCP round-trip. Note: auto_portfast is NOT applied here
+        (the JS layer doesn't have access to IOS CLI helpers); to apply
+        portfast in bulk, follow up with run_commands per switch."""
+        return self.call("connect_many", {"links": links})
 
     def configure_interface(self, device: str, interface: str,
                             ip: str, mask: str,

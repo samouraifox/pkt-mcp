@@ -502,6 +502,39 @@ connect("SW1",    "GigabitEthernet0/1", "R-CME", "GigabitEthernet0/0", "ETHERNET
   invoke IOS — it's a JS-side workspace mutation. Failures are
   `PT_REJECTED` with structured error_data (occupant / slot_type).
 
+## Bulk operations (phase 5.2, May 2026)
+
+Two MCP tools collapse the per-device round-trip + serial boot cost
+that dominated NovaCore 2.0:
+
+- `add_devices(devices)` — list of `{type, name, model, x, y}` dicts.
+  Single MCP call; IOS chassis boot in parallel via concurrent
+  `_bootWaitFor`'s. Observed: **6 routers + 1 switch in 31s** (vs.
+  ~183s serial; 5.9× speedup). Acceptance per-row, partial-failure
+  isolated.
+- `connect_many(links)` — list of `{dev_a, port_a, dev_b, port_b,
+  cable_type}` dicts. Sequential JS-side createLink loop, single MCP
+  round-trip. **5 cables in 0.5s.** `auto_portfast` is NOT applied
+  here (unlike single `connect`); follow up with `run_commands` on
+  each switch for portfast where needed.
+
+Both return `{results: [<row>, ...]}` aligned to input order; each
+row is `{ok: true, ...}` or `{error: {type, message, [data]}}`. A
+bad row does NOT abort the others. Top-level shape errors (e.g.
+`devices` not a list) still raise `BAD_ARGS` synchronously.
+
+Full design + benchmark: `docs/phase5.2-bulk-ops.md`.
+
+### When to reach for bulk
+
+- **Always for builds >5 IOS devices.** The router boot is the wall-
+  clock bottleneck; parallel boot pays back immediately.
+- **For >10 cables in a single design.** The MCP round-trip overhead
+  starts to dominate over actual createLink work.
+- **NOT for single ad-hoc placements.** Single-shot `add_device` is
+  clearer for one-off work; bulk's value is amortizing the boot
+  window across N.
+
 ## Naming conventions
 
 - Routers: `R1`, `R2`, `R3` (number from the topology diagram or

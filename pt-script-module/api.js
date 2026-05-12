@@ -260,6 +260,200 @@ function pollUntil(predicate, opts, onReady, onTimeout) {
 
 // ─── ops ─────────────────────────────────────────────────────────────────
 
+// ─── boot-wait helper (shared by op_add_device + op_add_devices) ──────
+//
+// Asynchronously waits for `dev` to reach user/enable CLI mode after a
+// fresh addDevice. Handles three boot paths:
+//   - ASA:                    long ROMMON+POST cold boot, no Configuration Dialog.
+//   - SWITCH/WIRELESS_ROUTER: short post-boot CLI wake-up.
+//   - ROUTER/MULTILAYER_SWITCH: System Configuration Dialog → "no" → "Press RETURN".
+// On reaching user/enable mode calls onSuccess(); on timeout calls
+// onFailure(errType, message, data).
+// Internally schedules setTimeout polls — multiple concurrent _bootWaitFor's
+// share PT's event loop and run in parallel (basis for op_add_devices
+// throughput vs. serial op_add_device).
+function _modeOf(tl) { try { return (tl && tl.getMode) ? tl.getMode() : ""; } catch (e) { return ""; } }
+function _promptOf(tl) { try { return (tl && tl.getPrompt) ? tl.getPrompt() : ""; } catch (e) { return ""; } }
+
+function _needsBootWait(typeStr) {
+    return typeStr === "ROUTER" || typeStr === "SWITCH" ||
+           typeStr === "WIRELESS_ROUTER" || typeStr === "MULTILAYER_SWITCH" ||
+           typeStr === "ASA";
+}
+
+function _bootWaitFor(dev, typeStr, onSuccess, onFailure) {
+    // ASA: boots ROMMON → POST → user mode at "ciscoasa>". No Config Dialog.
+    // CLI lives behind getConsoleLine (tlFor handles the asymmetry). Boot
+    // observed 90-150s — cap at ASA_BOOT_DEADLINE_MS=180s.
+    if (typeStr === "ASA") {
+        pollUntil(
+            function () {
+                var t = tlFor(dev);
+                if (!t) return false;
+                var m = _modeOf(t);
+                return (m === "user" || m === "enable");
+            },
+            { interval_ms: POLL_MS_INNER, deadline_ms: ASA_BOOT_DEADLINE_MS },
+            function () { onSuccess(); },
+            function () {
+                var tlF = tlFor(dev);
+                onFailure("PT_TIMEOUT",
+                    "ASA did not reach user mode within " + ASA_BOOT_DEADLINE_MS + "ms boot deadline",
+                    { last_mode: _modeOf(tlF), last_prompt: _promptOf(tlF),
+                      output_tail: (tlF && tlF.getOutput) ? tlF.getOutput().slice(-200) : "" });
+            }
+        );
+        return;
+    }
+
+    // SWITCH and WIRELESS_ROUTER: no boot dialog, but the CLI takes a few
+    // seconds to reach user/enable mode after addDevice. Phase 4.5
+    // feedback #5: connect()'s auto_portfast immediately CLI'd a fresh
+    // switch and IOS commands silently failed because the prompt was
+    // still at boot output. Contract: returned device is CLI-ready.
+    if (typeStr !== "ROUTER" && typeStr !== "MULTILAYER_SWITCH") {
+        pollUntil(
+            function () {
+                var t = tlFor(dev);
+                if (!t) return false;
+                var m = _modeOf(t);
+                return (m === "user" || m === "enable");
+            },
+            { interval_ms: POLL_MS_INNER, deadline_ms: ROUTER_BOOT_PHASE_MS },
+            function () { onSuccess(); },
+            function () {
+                // Defensive: try a single Enter (some switch builds park
+                // briefly at "Press RETURN") and re-poll once.
+                try {
+                    var t = tlFor(dev);
+                    if (t && typeof t.enterCommand === "function") t.enterCommand("");
+                } catch (e) {}
+                pollUntil(
+                    function () {
+                        var m = _modeOf(tlFor(dev));
+                        return (m === "user" || m === "enable");
+                    },
+                    { interval_ms: POLL_MS_INNER, deadline_ms: ROUTER_BOOT_PHASE_MS },
+                    function () { onSuccess(); },
+                    function () {
+                        var tlF = tlFor(dev);
+                        onFailure("PT_TIMEOUT",
+                            typeStr.toLowerCase() + " did not reach user mode within boot deadline",
+                            { last_mode: _modeOf(tlF), last_prompt: _promptOf(tlF) });
+                    }
+                );
+            }
+        );
+        return;
+    }
+
+    // Routers (and 3560/3650 multilayer switches — same boot path) boot
+    // into the System Configuration Dialog. PT IOS takes 1-3s to even
+    // reach the dialog prompt, so a fixed setTimeout doesn't work — poll
+    // for the dialog, send "no", poll for the "Press RETURN" state,
+    // send empty Enter, poll for user/enable mode.
+    var bootLabel = (typeStr === "MULTILAYER_SWITCH") ? "multilayer switch" : "router";
+
+    // Phase 1: dialog prompt is up, OR we're somehow already past it.
+    pollUntil(
+        function () {
+            var tl = tlFor(dev);
+            if (!tl) return false;
+            if (/yes\/no/i.test(_promptOf(tl))) return true;
+            var m = _modeOf(tl);
+            return (m === "user" || m === "enable");
+        },
+        { interval_ms: POLL_MS_INNER, deadline_ms: BOOT_DIALOG_DEADLINE_MS },
+        function () {
+            var tl = tlFor(dev);
+            if (tl && /yes\/no/i.test(_promptOf(tl))) {
+                try { tl.enterCommand("no"); }
+                catch (e) {
+                    onFailure("INTERNAL", bootLabel + " dialog skip enterCommand threw: " + e, {});
+                    return;
+                }
+            }
+            // Phase 2: post-"no", IOS prints "Press RETURN to get started!"
+            // and parks in mode=logout until we send an empty Enter. Wait
+            // for either user mode (already past) or that logout state, then
+            // send RETURN if needed and wait for user mode.
+            pollUntil(
+                function () {
+                    var t = tlFor(dev);
+                    if (!t) return false;
+                    var m = _modeOf(t);
+                    if (m === "user" || m === "enable" || m === "logout") return true;
+                    var out = (t.getOutput ? t.getOutput() : "");
+                    return /Press RETURN to get started/.test(out);
+                },
+                { interval_ms: POLL_MS_INNER, deadline_ms: ROUTER_BOOT_PHASE_MS },
+                function () {
+                    var t = tlFor(dev);
+                    var m = _modeOf(t);
+                    if (m !== "user" && m !== "enable") {
+                        try { t.enterCommand(""); } catch (e) {}
+                    }
+                    pollUntil(
+                        function () {
+                            var mm = _modeOf(tlFor(dev));
+                            return (mm === "user" || mm === "enable");
+                        },
+                        { interval_ms: POLL_MS_INNER, deadline_ms: ROUTER_BOOT_PHASE_MS },
+                        function () { onSuccess(); },
+                        function () {
+                            var t4 = tlFor(dev);
+                            onFailure("PT_TIMEOUT",
+                                bootLabel + " did not reach user mode after dialog + RETURN",
+                                { last_mode: _modeOf(t4), last_prompt: _promptOf(t4),
+                                  output_tail: (t4 && t4.getOutput) ? t4.getOutput().slice(-200) : "" });
+                        }
+                    );
+                },
+                function () {
+                    var t2 = tlFor(dev);
+                    onFailure("PT_TIMEOUT",
+                        bootLabel + " did not reach 'Press RETURN' state after sending 'no'",
+                        { last_mode: _modeOf(t2), last_prompt: _promptOf(t2),
+                          output_tail: (t2 && t2.getOutput) ? t2.getOutput().slice(-200) : "" });
+                }
+            );
+        },
+        function () {
+            // Phase 1 timeout — dialog never seen within BOOT_DIALOG_DEADLINE_MS.
+            // Defensive recovery (phase 4.5 feedback #1): the dialog might
+            // have rendered just after the last poll, or PT was saturated by
+            // parallel router adds. Send "no" + RETURN unconditionally and
+            // give it ROUTER_BOOT_PHASE_MS to land in user/enable.
+            try {
+                var tlR = tlFor(dev);
+                if (tlR && typeof tlR.enterCommand === "function") tlR.enterCommand("no");
+            } catch (e) {}
+            setTimeout(function () {
+                try {
+                    var tlR2 = tlFor(dev);
+                    if (tlR2 && typeof tlR2.enterCommand === "function") tlR2.enterCommand("");
+                } catch (e) {}
+                pollUntil(
+                    function () {
+                        var mm = _modeOf(tlFor(dev));
+                        return (mm === "user" || mm === "enable");
+                    },
+                    { interval_ms: POLL_MS_INNER, deadline_ms: ROUTER_BOOT_PHASE_MS },
+                    function () { onSuccess(); },
+                    function () {
+                        var tlF = tlFor(dev);
+                        onFailure("PT_TIMEOUT",
+                            bootLabel + " did not reach user mode (boot took >" +
+                            BOOT_DIALOG_DEADLINE_MS + "ms initial + defensive recovery)",
+                            { last_mode: _modeOf(tlF), last_prompt: _promptOf(tlF),
+                              output_tail: (tlF && tlF.getOutput) ? tlF.getOutput().slice(-200) : "" });
+                    }
+                );
+            }, 1500);
+        }
+    );
+}
+
 function op_add_device(args, done) {
     var typeStr = requireArg(args, "type",  "string");
     var name    = requireArg(args, "name",  "string");
@@ -307,198 +501,98 @@ function op_add_device(args, done) {
 
     // Non-IOS devices (PC/Server/Hub/IP_PHONE) are ready as soon as
     // addDevice returns.
-    if (typeStr !== "ROUTER" && typeStr !== "SWITCH" &&
-        typeStr !== "WIRELESS_ROUTER" && typeStr !== "MULTILAYER_SWITCH" &&
-        typeStr !== "ASA") {
+    if (!_needsBootWait(typeStr)) {
         return { uuid: String(uuid), name: name };
     }
 
-    // Shared CLI introspection helpers (used by SWITCH boot-wait, ROUTER
-    // dialog-skip, ASA boot-wait below). tlFor() lives at module scope —
-    // it dispatches to getConsoleLine() vs getCommandLine() per device kind.
-    function modeOf(tl) { try { return (tl && tl.getMode) ? tl.getMode() : ""; } catch (e) { return ""; } }
-    function promptOf(tl) { try { return (tl && tl.getPrompt) ? tl.getPrompt() : ""; } catch (e) { return ""; } }
+    _bootWaitFor(dev, typeStr,
+        function () { done({ uuid: String(uuid), name: name }, null); },
+        function (t, m, d) { done(null, err(t, m, d)); }
+    );
+    return DEFER;
+}
 
-    // ASA: boots ROMMON → POST → user mode at "ciscoasa>". No System
-    // Configuration Dialog. CLI surface comes up only via getConsoleLine
-    // (getCommandLine returns null on ASA — see phase 4.6 step 3 probe).
-    // tlFor handles that asymmetry. Boot is slow — observed 90-150s in the
-    // probe; ASA_BOOT_DEADLINE_MS is set to 180s as a conservative cap.
-    if (typeStr === "ASA") {
-        pollUntil(
-            function () {
-                var t = tlFor(dev);
-                if (!t) return false;
-                var m = modeOf(t);
-                return (m === "user" || m === "enable");
-            },
-            { interval_ms: POLL_MS_INNER, deadline_ms: ASA_BOOT_DEADLINE_MS },
-            function () { done({ uuid: String(uuid), name: name }, null); },
-            function () {
-                var tlF = tlFor(dev);
-                done(null, err("PT_TIMEOUT",
-                    "ASA did not reach user mode within " + ASA_BOOT_DEADLINE_MS + "ms boot deadline",
-                    { last_mode: modeOf(tlF), last_prompt: promptOf(tlF),
-                      output_tail: (tlF && tlF.getOutput) ? tlF.getOutput().slice(-200) : "" }));
-            }
-        );
-        return DEFER;
+// op_add_devices — bulk add. Takes {devices: [{type, name, model, x, y}, ...]}
+// and fans out: synchronous addDevice + setName for each row, then kicks
+// off parallel _bootWaitFor's for the IOS-bearing rows. Joins on a counter
+// and calls done() once with {results: [...]} aligned to the input order.
+// Each row is independent — one bad row (name collision, unknown type,
+// boot timeout) yields {error: {type, message, [data]}} for that row and
+// does NOT abort the others. Throws synchronously only on top-level shape
+// errors (devices not an array).
+function op_add_devices(args, done) {
+    var entries = (args || {}).devices;
+    if (!entries || typeof entries.length !== "number") {
+        throw err("BAD_ARGS", "devices must be an array");
+    }
+    var n = entries.length;
+    var results = new Array(n);
+    var remaining = n;
+
+    if (n === 0) return { results: [] };
+
+    function finish(i, val) {
+        results[i] = val;
+        remaining--;
+        if (remaining === 0) done({ results: results }, null);
     }
 
-    // SWITCH and WIRELESS_ROUTER: no boot dialog, but the CLI takes a few
-    // seconds to reach user/enable mode after addDevice. Phase 4.5 medium-
-    // test feedback #5: connect()'s auto_portfast immediately CLI'd a fresh
-    // switch and the IOS commands silently failed because the prompt was
-    // still at boot output. add_device's contract is "returned device is
-    // CLI-ready" — wait for it.
-    //
-    // MULTILAYER_SWITCH (3560/3650) is intentionally NOT in this branch —
-    // it boots into the System Configuration Dialog like a router and
-    // needs the same dialog-skip + RETURN sequence below.
-    if (typeStr !== "ROUTER" && typeStr !== "MULTILAYER_SWITCH") {
-        pollUntil(
-            function () {
-                var t = tlFor(dev);
-                if (!t) return false;
-                var m = modeOf(t);
-                return (m === "user" || m === "enable");
-            },
-            { interval_ms: POLL_MS_INNER, deadline_ms: ROUTER_BOOT_PHASE_MS },
-            function () { done({ uuid: String(uuid), name: name }, null); },
-            function () {
-                // Defensive: try a single Enter (some switch builds park
-                // briefly at "Press RETURN") and re-poll once.
-                try {
-                    var t = tlFor(dev);
-                    if (t && typeof t.enterCommand === "function") t.enterCommand("");
-                } catch (e) {}
-                pollUntil(
-                    function () {
-                        var m = modeOf(tlFor(dev));
-                        return (m === "user" || m === "enable");
-                    },
-                    { interval_ms: POLL_MS_INNER, deadline_ms: ROUTER_BOOT_PHASE_MS },
-                    function () { done({ uuid: String(uuid), name: name }, null); },
-                    function () {
-                        var tlF = tlFor(dev);
-                        done(null, err("PT_TIMEOUT",
-                            typeStr.toLowerCase() + " did not reach user mode within boot deadline",
-                            { last_mode: modeOf(tlF), last_prompt: promptOf(tlF) }));
-                    }
-                );
-            }
-        );
-        return DEFER;
-    }
-
-    // Routers (and 3560/3650 multilayer switches — same boot path) boot
-    // into the System Configuration Dialog (M5). PT IOS takes 1-3 s to
-    // even reach the dialog prompt, so a fixed setTimeout doesn't work —
-    // we have to poll for the dialog to actually appear before sending
-    // "no", then poll for the resulting transition into user mode.
-    // bootLabel surfaces the right device kind in timeout messages.
-    var bootLabel = (typeStr === "MULTILAYER_SWITCH") ? "multilayer switch" : "router";
-    // Phase 1: dialog prompt is up, OR we're somehow already past it.
-    pollUntil(
-        function () {
-            var tl = tlFor(dev);
-            if (!tl) return false;
-            if (/yes\/no/i.test(promptOf(tl))) return true;
-            var m = modeOf(tl);
-            return (m === "user" || m === "enable");
-        },
-        { interval_ms: POLL_MS_INNER, deadline_ms: BOOT_DIALOG_DEADLINE_MS },
-        function () {
-            var tl = tlFor(dev);
-            if (tl && /yes\/no/i.test(promptOf(tl))) {
-                try { tl.enterCommand("no"); }
-                catch (e) {
-                    done(null, err("INTERNAL", bootLabel + " dialog skip enterCommand threw: " + e));
+    for (var i = 0; i < n; i++) {
+        (function (idx) {
+            var d = entries[idx];
+            try {
+                if (!d || typeof d !== "object") {
+                    finish(idx, { error: { type: "BAD_ARGS", message: "row not an object" } });
                     return;
                 }
-            }
-            // Phase 2: post-"no", IOS prints "Press RETURN to get started!"
-            // and parks in mode=logout until we send an empty Enter. Wait
-            // for either user mode (already past) or that logout state, then
-            // send RETURN if needed and wait for user mode.
-            pollUntil(
-                function () {
-                    var t = tlFor(dev);
-                    if (!t) return false;
-                    var m = modeOf(t);
-                    if (m === "user" || m === "enable" || m === "logout") return true;
-                    var out = (t.getOutput ? t.getOutput() : "");
-                    return /Press RETURN to get started/.test(out);
-                },
-                { interval_ms: POLL_MS_INNER, deadline_ms: ROUTER_BOOT_PHASE_MS },
-                function () {
-                    var t = tlFor(dev);
-                    var m = modeOf(t);
-                    if (m !== "user" && m !== "enable") {
-                        // Press RETURN.
-                        try { t.enterCommand(""); } catch (e) {}
-                    }
-                    pollUntil(
-                        function () {
-                            var mm = modeOf(tlFor(dev));
-                            return (mm === "user" || mm === "enable");
-                        },
-                        { interval_ms: POLL_MS_INNER, deadline_ms: ROUTER_BOOT_PHASE_MS },
-                        function () { done({ uuid: String(uuid), name: name }, null); },
-                        function () {
-                            var t4 = tlFor(dev);
-                            done(null, err("PT_TIMEOUT",
-                                bootLabel + " did not reach user mode after dialog + RETURN",
-                                { last_mode: modeOf(t4), last_prompt: promptOf(t4),
-                                  output_tail: (t4 && t4.getOutput) ? t4.getOutput().slice(-200) : "" }));
-                        }
-                    );
-                },
-                function () {
-                    var t2 = tlFor(dev);
-                    done(null, err("PT_TIMEOUT",
-                        bootLabel + " did not reach 'Press RETURN' state after sending 'no'",
-                        { last_mode: modeOf(t2), last_prompt: promptOf(t2),
-                          output_tail: (t2 && t2.getOutput) ? t2.getOutput().slice(-200) : "" }));
+                var typeStr = d.type, name = d.name, model = d.model, x = d.x, y = d.y;
+                if (typeof typeStr !== "string" || typeof name !== "string" ||
+                    typeof model !== "string" || typeof x !== "number" || typeof y !== "number") {
+                    finish(idx, { error: { type: "BAD_ARGS",
+                        message: "row missing/bad fields (type, name, model: string; x, y: number)" } });
+                    return;
                 }
-            );
-        },
-        function () {
-            // Phase 1 timeout — dialog never seen within BOOT_DIALOG_DEADLINE_MS.
-            // Defensive recovery (phase 4.5 medium-test feedback #1): the
-            // dialog might have rendered just after the last poll, or PT was
-            // saturated by parallel router adds. Send "no" + RETURN
-            // unconditionally and give it ROUTER_BOOT_PHASE_MS to land in
-            // user/enable. Worst case is one or two harmless extra Enters
-            // sent to a router that's not at the dialog.
-            try {
-                var tlR = tlFor(dev);
-                if (tlR && typeof tlR.enterCommand === "function") tlR.enterCommand("no");
-            } catch (e) {}
-            setTimeout(function () {
-                try {
-                    var tlR2 = tlFor(dev);
-                    if (tlR2 && typeof tlR2.enterCommand === "function") tlR2.enterCommand("");
-                } catch (e) {}
-                pollUntil(
-                    function () {
-                        var mm = modeOf(tlFor(dev));
-                        return (mm === "user" || mm === "enable");
-                    },
-                    { interval_ms: POLL_MS_INNER, deadline_ms: ROUTER_BOOT_PHASE_MS },
-                    function () { done({ uuid: String(uuid), name: name }, null); },
-                    function () {
-                        var tlF = tlFor(dev);
-                        done(null, err("PT_TIMEOUT",
-                            bootLabel + " did not reach user mode (boot took >" +
-                            BOOT_DIALOG_DEADLINE_MS + "ms initial + defensive recovery)",
-                            { last_mode: modeOf(tlF), last_prompt: promptOf(tlF),
-                              output_tail: (tlF && tlF.getOutput) ? tlF.getOutput().slice(-200) : "" }));
-                    }
+                var typeInt = DEVICE_TYPES[typeStr];
+                if (typeInt === undefined) {
+                    finish(idx, { error: { type: "BAD_ARGS",
+                        message: "unknown device type: " + typeStr } });
+                    return;
+                }
+                if (findDeviceByName(name)) {
+                    finish(idx, { error: { type: "PT_REJECTED",
+                        message: "device name already exists: " + name } });
+                    return;
+                }
+                var uuid = lw().addDevice(typeInt, model, x, y);
+                if (!uuid) {
+                    finish(idx, { error: { type: "PT_REJECTED",
+                        message: "addDevice rejected model: " + model,
+                        data: { type: typeStr, model: model } } });
+                    return;
+                }
+                var dev = net().getDevice(uuid);
+                if (!dev) {
+                    finish(idx, { error: { type: "INTERNAL",
+                        message: "addDevice returned uuid but getDevice() yielded null" } });
+                    return;
+                }
+                dev.setName(name);
+
+                if (!_needsBootWait(typeStr)) {
+                    finish(idx, { ok: true, uuid: String(uuid), name: name });
+                    return;
+                }
+
+                _bootWaitFor(dev, typeStr,
+                    function () { finish(idx, { ok: true, uuid: String(uuid), name: name }); },
+                    function (t, m, dd) { finish(idx, { error: { type: t, message: m, data: dd } }); }
                 );
-            }, 1500);
-        }
-    );
+            } catch (e) {
+                finish(idx, { error: { type: "INTERNAL", message: "row " + idx + " threw: " + e } });
+            }
+        })(i);
+    }
+
     return DEFER;
 }
 
@@ -546,6 +640,69 @@ function op_connect(args) {
             { dev_a: devA, port_a: portA, dev_b: devB, port_b: portB, cable_type: cable });
     }
     return { ok: true };
+}
+
+// op_connect_many — bulk connect. Takes {links: [{dev_a, port_a, dev_b,
+// port_b, cable_type}, ...]} and creates them sequentially at the JS
+// layer. Each row is independent; one bad row yields a {error: {...}}
+// entry and does NOT abort the others. createLink is synchronous (no
+// boot wait needed), so this is purely a round-trip-collapse — one
+// MCP call vs. N. auto_portfast is NOT applied here; the Python MCP
+// `connect_many` wrapper handles that if requested.
+function op_connect_many(args) {
+    var entries = (args || {}).links;
+    if (!entries || typeof entries.length !== "number") {
+        throw err("BAD_ARGS", "links must be an array");
+    }
+    var n = entries.length;
+    var results = new Array(n);
+
+    for (var i = 0; i < n; i++) {
+        var d = entries[i];
+        try {
+            if (!d || typeof d !== "object") {
+                results[i] = { error: { type: "BAD_ARGS", message: "row not an object" } };
+                continue;
+            }
+            var devA = d.dev_a, portA = d.port_a, devB = d.dev_b, portB = d.port_b, cable = d.cable_type;
+            if (typeof devA !== "string" || typeof portA !== "string" ||
+                typeof devB !== "string" || typeof portB !== "string" ||
+                typeof cable !== "string") {
+                results[i] = { error: { type: "BAD_ARGS",
+                    message: "row missing/bad fields (dev_a, port_a, dev_b, port_b, cable_type: string)" } };
+                continue;
+            }
+            var cableInt = CABLE_TYPES[cable];
+            if (cableInt === undefined) {
+                results[i] = { error: { type: "BAD_ARGS",
+                    message: "unknown cable_type: " + cable,
+                    data: { allowed: Object.keys(CABLE_TYPES) } } };
+                continue;
+            }
+            if (!findDeviceByName(devA)) {
+                results[i] = { error: { type: "PT_NOT_FOUND", message: "device not found: " + devA } };
+                continue;
+            }
+            if (!findDeviceByName(devB)) {
+                results[i] = { error: { type: "PT_NOT_FOUND", message: "device not found: " + devB } };
+                continue;
+            }
+            var ok = lw().createLink(devA, portA, devB, portB, cableInt);
+            if (!ok) {
+                results[i] = { error: { type: "PT_REJECTED",
+                    message: "createLink failed: " + devA + "/" + portA + " <-> " +
+                             devB + "/" + portB + " (" + cable + ")",
+                    data: { dev_a: devA, port_a: portA, dev_b: devB, port_b: portB,
+                            cable_type: cable } } };
+                continue;
+            }
+            results[i] = { ok: true };
+        } catch (e) {
+            results[i] = { error: { type: "INTERNAL", message: "row " + i + " threw: " + e } };
+        }
+    }
+
+    return { results: results };
 }
 
 function op_configure_interface(args, done) {
@@ -1112,8 +1269,10 @@ function op_power_device(args) {
 
 var DISPATCH = {
     add_device:          op_add_device,
+    add_devices:         op_add_devices,
     delete_device:       op_delete_device,
     connect:             op_connect,
+    connect_many:        op_connect_many,
     configure_interface: op_configure_interface,
     configure_host:      op_configure_host,
     run_command:         op_run_command,
