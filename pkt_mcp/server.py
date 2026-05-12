@@ -255,11 +255,17 @@ def add_device(type: str, name: str, model: str, x: float, y: float) -> dict:
       ineffective until nameif/security-level land.
     - IP_PHONE places a phone with three ports (Vlan1 / Switch / PC). The
       `Switch` port is the upstream link; cable it to a switch access
-      port with `connect`. Phones register with CME, which was REMOVED
-      from PT 9.0.0 — phones can be placed and cabled but will never
-      register, and run_command on a phone raises BAD_ARGS (no useful
-      terminal). Switchport voice VLAN + DHCP option 150 still apply at
-      the switch side."""
+      port with `connect`. `run_command` on a phone raises BAD_ARGS (no
+      useful terminal — phones don't expose getCommandLine). Phones
+      register with CME (classic `telephony-service` / `ephone-dn`
+      flavour, NOT SIP CME) on a 2811 router model — phase 4.7
+      correction to the earlier "CME removed" verdict. The phase 5.1
+      end-to-end smoke confirmed: `add_module(phone, "IP_PHONE_POWER_
+      ADAPTER")` + standard voice-VLAN + telephony-service +
+      router-side `ip dhcp pool ... option 150 ip <CME>` registers a
+      7960 cleanly. Without the power adapter, the phone gets cabled
+      but won't register — that was the missing step that broke
+      NovaCore 2.0's voice tier."""
     return _call(
         _bridge.add_device, type=type, name=name, model=model, x=x, y=y
     )

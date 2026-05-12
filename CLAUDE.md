@@ -277,8 +277,14 @@ on the canvas directly. Out of scope for phase 4.7.
       `max_users` (default 50), `lease_time` (ms, default 86400000),
       `domain_name`. NETWORK and END_IP are auto-derived from `start_ip`
       + `mask` + `max_users` so callers don't have to compute them.
-      Solves PT 9's router DHCP CLI rejecting `option 150 ip X.X.X.X`
-      (phase 4.10).
+      Originally built to work around a believed PT 9 router-DHCP CLI
+      limitation; that belief was disproven by the phase 5.1 CME smoke
+      (router-side `option 150 ip X.X.X.X` is accepted AND served — a
+      7960 with `IP_PHONE_POWER_ADAPTER` installed registers cleanly
+      using only router-side `ip dhcp pool` + `option 150`). Tool is
+      still useful for Server-PT-based DHCP fleets where the router
+      doesn't run dhcpd, but router-side DHCP is no longer the blocker
+      it was thought to be (phase 4.10 / corrected phase 5.1).
     * `set_pkt_zones(pkt, [{kind, x, y, w, h, fill_color, outline_color,
       label}, ...])` — adds visual zones (colored rectangles, ellipses,
       labels) to the canvas. Three shape kinds: `rect_outline` (Image 1
