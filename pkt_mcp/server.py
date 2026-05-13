@@ -36,6 +36,7 @@ from pkt_services import (  # noqa: E402
     set_pkt_dns_records as _set_pkt_dns_records,
     set_pkt_http_files as _set_pkt_http_files,
     set_pkt_ap_wireless as _set_pkt_ap_wireless,
+    set_pkt_wireless_client as _set_pkt_wireless_client,
     set_pkt_dhcp_pools as _set_pkt_dhcp_pools,
     SERVICE_NAMES as _SERVICE_NAMES,
 )
@@ -1272,6 +1273,65 @@ def set_pkt_ap_wireless(
         raise ToolError("BAD_ARGS: config must be a non-empty dict")
     try:
         return _set_pkt_ap_wireless(pkt_path, config)
+    except FileNotFoundError as e:
+        raise ToolError(f"PT_NOT_FOUND: {e}") from e
+    except (ValueError, IOError) as e:
+        raise ToolError(f"INTERNAL: {e}") from e
+
+
+@mcp.tool()
+def set_pkt_wireless_client(
+    pkt_path: str,
+    config: dict,
+) -> dict:
+    """Configure wireless host profiles so they auto-associate with a matching
+    AP on file load — solves the long-standing "wireless client → AP needs a
+    GUI click" limitation in PT 9 (phase 5.4, May 2026).
+
+    Patches each host's <WIRELESS_CLIENT> XML block to match the AP's SSID +
+    auth + passphrase, sets ENABLED_HOST → Wireless0, clears the stale
+    DHCP_CLIENT.PORT_DATA_MAP (PT bug — a leftover entry there silently
+    blocks the static IP), and optionally sets a static IPv4 on the
+    wireless interface. On File→Open the host scans, finds the matching
+    AP, and associates within ~1-2 seconds — no clicks required.
+
+    Pairs with set_pkt_ap_wireless: patch both ends, reopen, done.
+
+    Args:
+        pkt_path: Absolute path to existing .pkt file.
+        config: {host_name: {key: val, ...}, ...} where keys are:
+            "ssid":       str — target SSID (required)
+            "auth":       "open" | "wpa2-psk" (required, case-insensitive)
+            "passphrase": str — required iff auth="wpa2-psk", 8-63 chars
+            "ip":         str — optional static IPv4 for Wireless0
+            "mask":       str — defaults to 255.255.255.0 when ip is set
+            "gateway":    str — optional default gateway
+            "dns":        str — optional DNS server
+            Omit "ip" to let the host use DHCP / APIPA fallback.
+
+    Returns the same envelope as set_pkt_services. Status per host:
+        "applied" / "no_change" / "block_missing" / "device_missing" /
+        "missing_ssid_or_auth" / "missing_passphrase" / "unknown_auth:<val>".
+
+    Workflow (corporate-network style with 12 dept APs):
+        save_pkt → set_pkt_ap_wireless({"AP_TPK": {"ssid": "TPK",
+                       "auth": "wpa2-psk", "passphrase": "CISCO123"}, ...})
+                 → set_pkt_wireless_client({"PC_TPK": {"ssid": "TPK",
+                       "auth": "wpa2-psk", "passphrase": "CISCO123",
+                       "ip": "192.168.170.10"}, ...})
+                 → File→Open in PT. Every wireless host auto-associates
+                   to its dept SSID and picks up its static IP.
+
+    Validated at N=3 hosts × 3 APs WPA2 with cross-AP ping at 0% loss.
+    Same auth-mode limitation as set_pkt_ap_wireless: "open" and "wpa2-psk"
+    are wired; WEP / WPA-PSK / WPA2-Enterprise need probe captures.
+    """
+    if not pkt_path.startswith("/"):
+        raise ToolError("BAD_ARGS: pkt_path must be absolute (start with '/')")
+    if not isinstance(config, dict) or not config:
+        raise ToolError("BAD_ARGS: config must be a non-empty dict")
+    try:
+        return _set_pkt_wireless_client(pkt_path, config)
     except FileNotFoundError as e:
         raise ToolError(f"PT_NOT_FOUND: {e}") from e
     except (ValueError, IOError) as e:

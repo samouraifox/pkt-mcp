@@ -306,6 +306,182 @@ def _patch_ap_wireless(block: str, config: Mapping[str, str | int]) -> tuple[str
     return new_block, "applied"
 
 
+# ── Wireless client (phase 5.4) ───────────────────────────────────────────
+#
+# PT 9 wireless host config is persisted as XML across three sub-blocks of
+# <WIRELESS_CLIENT> in the device's ENGINE block:
+#   <WIRELESS_COMMON>     — staged radio state + WEP_PROCESS (for WPA2-PSK)
+#   <PROFILES>            — list of saved <WIRELESS_PROFILE>s
+#   <CURRENT_PROFILE>     — the active <WIRELESS_PROFILE> (drives association)
+# Plus three out-of-block knobs the host needs for an actual ping to work:
+#   <ENABLED_HOST>        — must point at "Wireless0" + ENABLED=1
+#   <DHCP_CLIENT><PORT_DATA_MAP>  — MUST be empty for static IPs to apply
+#   the host's <PORT> with TYPE=eHostWireless* — IP/SUBNET + PORT_DHCP_ENABLE
+# Auth codes match the AP side (open=0/0, wpa2-psk=4/4); WPA2 passphrase
+# lives in <WEP_PROCESS><KEY> on the WIRELESS_COMMON side and <WEP_KEY> on
+# the WIRELESS_PROFILE side (despite the names, both store the WPA2 PSK).
+
+# Phase 5.4 (May 2026): cracked via JS-surface + file-diff probes. The JS
+# wireless-client API is reachable (CWirelessClientProcess exposes 40
+# methods on dev.getProcess("WirelessClient")) but the apply/commit call
+# is buggy in PT 9.0.0 — setCurrentProfileStringIPs hits an internal
+# vector OOB. File-patch is the only working path.
+
+_WIRELESS_CLIENT_RE = re.compile(
+    r"<WIRELESS_CLIENT>[\s\S]*?</WIRELESS_CLIENT>"
+)
+_DHCP_PORT_DATA_MAP_RE = re.compile(
+    r"<PORT_DATA_MAP>[\s\S]*?</PORT_DATA_MAP>|<PORT_DATA_MAP\s*/>"
+)
+_ENABLED_HOST_RE = re.compile(
+    r"<ENABLED_HOST>[\s\S]*?</ENABLED_HOST>|<ENABLED_HOST\s*/>"
+)
+_HOST_WIRELESS_PORT_RE = re.compile(
+    r"<PORT>(?:(?!<PORT>)[\s\S])*?<TYPE>eHostWireless\w+</TYPE>(?:(?!<PORT>)[\s\S])*?</PORT>"
+)
+
+
+def _render_wireless_profile(
+    name: str, ssid: str, auth_v: int, enc_v: int, key: str,
+    *, dhcp: bool, ip: str | None, mask: str | None,
+    gateway: str | None, dns: str | None,
+) -> str:
+    """Render one <WIRELESS_PROFILE> block. NETWORK_TYPE=7 matches what
+    PT's GUI writes for both open and WPA2-PSK Infrastructure profiles."""
+    ip_xml = f"<IP_ADDRESS>{ip}</IP_ADDRESS>" if ip else "<IP_ADDRESS/>"
+    mask_xml = f"<SUBNET_MASK>{mask}</SUBNET_MASK>" if mask else "<SUBNET_MASK/>"
+    gw_xml = f"<DEFAULT_GATEWAY>{gateway}</DEFAULT_GATEWAY>" if gateway else "<DEFAULT_GATEWAY/>"
+    dns_xml = f"<DNS>{dns}</DNS>" if dns else "<DNS/>"
+    return (
+        "<WIRELESS_PROFILE>"
+        f"<NAME>{name}</NAME>"
+        f"<SSID>{ssid}</SSID>"
+        "<NETWORK_TYPE>7</NETWORK_TYPE>"
+        "<RADIO_BAND>0</RADIO_BAND>"
+        f"<AUTHEN_TYPE>{auth_v}</AUTHEN_TYPE>"
+        f"<ENCRYPT_TYPE>{enc_v}</ENCRYPT_TYPE>"
+        f"<WEP_KEY>{key}</WEP_KEY>"
+        "<WPA_EAP_USERID></WPA_EAP_USERID>"
+        "<WPA_EAP_PASSWORD></WPA_EAP_PASSWORD>"
+        f"<DHCP_ENABLED>{1 if dhcp else 0}</DHCP_ENABLED>"
+        "<DHCPV6_ENABLED>1</DHCPV6_ENABLED>"
+        f"{ip_xml}{mask_xml}{gw_xml}{dns_xml}"
+        "<CHANNEL>1</CHANNEL>"
+        "<VLAN>1</VLAN>"
+        "</WIRELESS_PROFILE>"
+    )
+
+
+def _patch_wireless_client(
+    block: str, config: Mapping[str, str | int],
+) -> tuple[str, str]:
+    """Replace the device's <WIRELESS_CLIENT> with a target-SSID profile
+    + a Default profile, set ENABLED_HOST to Wireless0, clear the stale
+    DHCP_CLIENT.PORT_DATA_MAP, and (if `ip` given) set the wireless port
+    to a static IP. Config keys:
+        "ssid":       str — target SSID (required)
+        "auth":       "open" | "wpa2-psk" (required)
+        "passphrase": str — required iff auth='wpa2-psk', 8-63 chars
+        "ip":         str — optional static IP for Wireless0
+        "mask":       str — defaults to 255.255.255.0
+        "gateway":    str — optional
+        "dns":        str — optional
+    """
+    if "<WIRELESS_CLIENT>" not in block:
+        return block, "block_missing"
+
+    ssid = config.get("ssid")
+    auth = config.get("auth")
+    if not ssid or not auth:
+        return block, "missing_ssid_or_auth"
+    auth_norm = str(auth).lower()
+    if auth_norm not in _WIRELESS_AUTH_CODES:
+        return block, f"unknown_auth:{auth}"
+    enc_v, auth_v, wep_enc_v = _WIRELESS_AUTH_CODES[auth_norm]
+    key = str(config.get("passphrase", "") or "")
+    if auth_norm == "wpa2-psk" and not key:
+        return block, "missing_passphrase"
+
+    ip = config.get("ip")
+    mask = config.get("mask", "255.255.255.0") if ip else None
+    gateway = config.get("gateway")
+    dns = config.get("dns")
+    static = ip is not None
+
+    # WEP_PROCESS inside WIRELESS_COMMON (the schema PT's GUI writes for WPA2-PSK).
+    wep_process = ""
+    if auth_norm != "open":
+        wep_process = (
+            "<WEP_PROCESS>"
+            f"<KEY>{key}</KEY>"
+            "<USERID></USERID>"
+            "<PASSWORD></PASSWORD>"
+            f"<ENCRYPTION>{wep_enc_v}</ENCRYPTION>"
+            "</WEP_PROCESS>"
+        )
+
+    target_prof = _render_wireless_profile(
+        f"{ssid}-prof", ssid, auth_v, enc_v, key,
+        dhcp=not static, ip=ip, mask=mask, gateway=gateway, dns=dns,
+    )
+    default_prof = _render_wireless_profile(
+        "Default", "Default", 0, 0, "",
+        dhcp=True, ip=None, mask=None, gateway=None, dns=None,
+    )
+
+    new_wc = (
+        "<WIRELESS_CLIENT>"
+        "<WIRELESS_COMMON>"
+        "<NETWORK_MODE>7</NETWORK_MODE>"
+        f"<SSID>{ssid}</SSID>"
+        f"<ENCRYPT_TYPE>{enc_v}</ENCRYPT_TYPE>"
+        f"<AUTHEN_TYPE>{auth_v}</AUTHEN_TYPE>"
+        "<RADIO_BAND>0</RADIO_BAND>"
+        "<WIDE_CHANNEL>0</WIDE_CHANNEL>"
+        "<STANDARD_CHANNEL>0</STANDARD_CHANNEL>"
+        f"{wep_process}"
+        "<STANDARD_CHANNEL5G>112</STANDARD_CHANNEL5G>"
+        "</WIRELESS_COMMON>"
+        f"<PROFILES>{target_prof}{default_prof}</PROFILES>"
+        f"<CURRENT_PROFILE>{target_prof}</CURRENT_PROFILE>"
+        "</WIRELESS_CLIENT>"
+    )
+
+    new_block, n = _WIRELESS_CLIENT_RE.subn(new_wc, block, count=1)
+    if n == 0:
+        return block, "block_missing"
+
+    # ENABLED_HOST → point at Wireless0.
+    enabled_host = (
+        "<ENABLED_HOST><PORT>Wireless0</PORT><ENABLED>1</ENABLED></ENABLED_HOST>"
+    )
+    new_block = _ENABLED_HOST_RE.sub(enabled_host, new_block, count=1)
+
+    # DHCP_CLIENT.PORT_DATA_MAP MUST be empty — a stale Wireless0 entry
+    # there causes PT to ignore the static IP at runtime (phase 5.4 finding).
+    new_block = _DHCP_PORT_DATA_MAP_RE.sub("<PORT_DATA_MAP/>", new_block, count=1)
+
+    # Wireless port — apply static IP / DHCP setting.
+    if static:
+        def _fix_port(m: re.Match) -> str:
+            p = m.group(0)
+            p = re.sub(r"<IP>[^<]*</IP>|<IP\s*/>", f"<IP>{ip}</IP>", p, count=1)
+            p = re.sub(
+                r"<SUBNET>[^<]*</SUBNET>|<SUBNET\s*/>",
+                f"<SUBNET>{mask}</SUBNET>", p, count=1,
+            )
+            p = re.sub(
+                r"<PORT_DHCP_ENABLE>[^<]*</PORT_DHCP_ENABLE>",
+                "<PORT_DHCP_ENABLE>false</PORT_DHCP_ENABLE>", p, count=1,
+            )
+            return p
+        new_block = _HOST_WIRELESS_PORT_RE.sub(_fix_port, new_block, count=1)
+
+    if new_block == block:
+        return block, "no_change"
+    return new_block, "applied"
+
+
 # ── DHCP pools (phase 4.10) ───────────────────────────────────────────────
 #
 # Server-PT DHCP lives at:
@@ -705,6 +881,61 @@ def set_pkt_ap_wireless(
 
     def patcher(block: str, cfg: Mapping[str, str | int]) -> tuple[str, str]:
         return _patch_ap_wireless(block, cfg)
+
+    patched, report = _patch_each_device(xml, config_by_device, patcher)
+    size = _save_pkt(patched, output_path)
+    return {"input": pkt_path, "output": output_path, "report": report, "size": size}
+
+
+def set_pkt_wireless_client(
+    pkt_path: str,
+    config_by_device: Mapping[str, Mapping[str, str | int]],
+    *,
+    output_path: str | None = None,
+) -> dict:
+    """Configure wireless host profiles so they auto-associate with a matching
+    AP on file load — no GUI clicks required.
+
+    Patches each host's <WIRELESS_CLIENT> block (WIRELESS_COMMON + PROFILES +
+    CURRENT_PROFILE) to make the target SSID/auth/passphrase match the AP,
+    sets ENABLED_HOST → Wireless0, clears DHCP_CLIENT.PORT_DATA_MAP (a stale
+    entry there overrides the static IP), and optionally sets a static IP
+    on the wireless port.
+
+    Args:
+        pkt_path: Path to existing .pkt file.
+        config_by_device: {host_name: {key: val, ...}, ...} where keys are:
+            "ssid":       str — target SSID (required)
+            "auth":       "open" | "wpa2-psk"  (required, case-insensitive)
+            "passphrase": str — required iff auth="wpa2-psk", 8-63 chars
+            "ip":         str — optional static IPv4 for Wireless0
+            "mask":       str — defaults to 255.255.255.0 when ip is set
+            "gateway":    str — optional default gateway
+            "dns":        str — optional DNS server
+            Omit "ip" to use DHCP / APIPA fallback for the wireless interface.
+        output_path: Defaults to overwriting pkt_path.
+
+    Returns the same envelope as set_pkt_services. Status per device:
+        "applied" / "no_change" / "block_missing" / "device_missing" /
+        "missing_ssid_or_auth" / "missing_passphrase" / "unknown_auth:<val>".
+
+    Workflow:
+        save_pkt → set_pkt_ap_wireless({"AP1": {"ssid": "Corp", ...}})
+                 → set_pkt_wireless_client({"PC1": {"ssid": "Corp", "auth":
+                       "wpa2-psk", "passphrase": "..."}, ...})
+                 → File→Open the .pkt. Each wireless host auto-associates
+                   with its matching AP within a couple seconds.
+
+    Same limitation as set_pkt_ap_wireless: only "open" and "wpa2-psk"
+    modes wired. WEP / WPA-PSK / WPA2-Enterprise need probe captures of
+    their WEP_PROCESS layout.
+    """
+    if output_path is None:
+        output_path = pkt_path
+    xml = _load_xml(pkt_path)
+
+    def patcher(block: str, cfg: Mapping[str, str | int]) -> tuple[str, str]:
+        return _patch_wireless_client(block, cfg)
 
     patched, report = _patch_each_device(xml, config_by_device, patcher)
     size = _save_pkt(patched, output_path)

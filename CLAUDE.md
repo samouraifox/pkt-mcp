@@ -235,17 +235,20 @@ on the canvas directly. Out of scope for phase 4.7.
     explicitly: `["enable", "", "show running-config"]`.
 
 ### Things PT 9.0.0 doesn't support
-- **Server-PT services + DNS records + HTTP file content + AP wireless
+- **Server-PT services + DNS records + HTTP file content + AP/client wireless
   are NOT runtime-scriptable, BUT they ARE file-patchable** (phases
-  4.8 + 4.9). The Q_INVOKABLE service classes (`CServerHttp`, `CServerDns`,
-  `CServerDhcp`, `CServerMail`, `ServerSyslog`) exist in C++ but the
-  Server-PT/Access-Point device's JS surface doesn't expose service or
-  wireless config — `getProcess(<name>)` returns null, no `setSsid` /
-  `setEnabled` setters. So you can't mutate any of this in a running PT
-  session via the JS bridge. **BUT** the saved .pkt file carries every
+  4.8 + 4.9 + 5.4). The Q_INVOKABLE service classes (`CServerHttp`,
+  `CServerDns`, `CServerDhcp`, `CServerMail`, `ServerSyslog`) exist in C++
+  but the Server-PT/Access-Point device's JS surface doesn't expose
+  service or wireless-server config — `getProcess(<name>)` returns null,
+  no `setSsid` / `setEnabled` setters. The wireless CLIENT side has a
+  Q_INVOKABLE surface (40 methods on `getProcess("WirelessClient")`) but
+  its commit/apply IPC binding is bugged in PT 9.0.0
+  (`setCurrentProfileStringIPs` hits an internal `vector::_M_range_check`),
+  so the JS path is dead too. **BUT** the saved .pkt file carries every
   state value as XML, and PT 9 uses the same Twofish-EAX + obfuscation
   pipeline as prior versions (cracked & vendored under `tools/unpacket/`,
-  MIT — Punkcake21/Unpacket). Six MCP tools cover the file-patch path:
+  MIT — Punkcake21/Unpacket). Seven MCP tools cover the file-patch path:
     * `set_pkt_services(pkt, {dev: {svc: bool}})` — HTTP/HTTPS/DNS/TFTP/
       NTP/FTP/SYSLOG/AAA/SMTP/POP3/NETFLOW on/off (phase 4.8).
     * `set_pkt_dns_records(pkt, {dev: {hostname: ip}})` — replaces the
@@ -268,6 +271,20 @@ on the canvas directly. Out of scope for phase 4.7.
       WEP / WPA-PSK / WPA2-Enterprise have code points but aren't wired
       yet — capture them on demand and add to `_WIRELESS_AUTH_CODES`
       (phase 4.9).
+    * `set_pkt_wireless_client(pkt, {host: {ssid, auth, passphrase,
+      ip?, mask?, gateway?, dns?}})` — solves the wireless client →
+      AP auto-association problem (phase 5.4). Patches the host's
+      `<WIRELESS_CLIENT>` block (WIRELESS_COMMON + PROFILES + CURRENT_PROFILE
+      with NETWORK_MODE=7 and NETWORK_TYPE=7 — what PT's GUI writes for
+      both open and WPA2-PSK Infrastructure profiles), sets
+      `<ENABLED_HOST>` to point at Wireless0, clears
+      `<DHCP_CLIENT><PORT_DATA_MAP>` (a stale entry there silently
+      blocks the static IP at runtime — PT bug), and optionally writes a
+      static IPv4 onto the Wireless0 PORT. On File→Open each host scans,
+      finds the matching AP, and auto-associates in ~1-2 seconds — no
+      GUI clicks. Pairs with `set_pkt_ap_wireless`: patch both ends + save
+      + reopen. Auth modes mirror the AP side (`"open"` / `"wpa2-psk"`).
+      Validated at N=3 hosts × 3 APs WPA2 cross-AP ping 0% loss.
     * `set_pkt_dhcp_pools(pkt, {dev: {pool_name: {start_ip, mask, …}}})`
       — adds or replaces DHCP pools on FastEthernet0 of a Server-PT and
       force-enables the DHCP service (`<ENABLED>1</ENABLED>` on the
@@ -458,9 +475,41 @@ add_device(type="PC",           name="PC1", model="PC-PT",          x=300, y=100
 add_module(device="PC1", module_model="Linksys-WMP300N",
            container="root", slot=0, replace_existing=True)
 
-# After install: PC1 has `Wireless0`. SSID config on the AP side is via
-# set_pkt_ap_wireless (file-patcher), not at runtime. PC's wireless
-# association is GUI-only in PT 9 — there's no programmatic equivalent.
+# After install: PC1 has `Wireless0`. Both AP- and client-side SSID config
+# are file-patcher operations (set_pkt_ap_wireless + set_pkt_wireless_client,
+# phase 5.4). On File→Open, hosts auto-associate to their matching AP and
+# pick up their static IP — no GUI clicks. See "Workflow — wireless client
+# auto-association" below.
+```
+
+### Workflow — wireless client auto-association (phase 5.4)
+
+```python
+# Both sides patched in a saved .pkt, then reopen — full auto-associate
+# in ~2s, validated at N=3 hosts × 3 APs WPA2 with cross-AP ping at 0%.
+
+add_device(type="ACCESS_POINT", name="AP_TPK", model="AccessPoint-PT", x=100, y=200)
+add_device(type="PC",           name="PC_TPK", model="PC-PT",          x=100, y=100)
+add_module(device="PC_TPK", module_model="Linksys-WMP300N",
+           container="root", slot=0, replace_existing=True)
+# ...wire AP_TPK to a switch backbone via connect(..."Port 0"...)
+
+save_pkt(path="/tmp/lab.pkt")
+
+# Patch AP wireless (existing tool — broadcasts the SSID).
+set_pkt_ap_wireless("/tmp/lab.pkt", {
+    "AP_TPK": {"ssid": "TPK", "auth": "wpa2-psk", "passphrase": "CISCO123"},
+})
+
+# Patch the wireless host's profile to match — auto-associates on load,
+# plus static IP without DHCP, plus the right ENABLED_HOST + cleared
+# DHCP_CLIENT.PORT_DATA_MAP that PT needs to actually apply the IP.
+set_pkt_wireless_client("/tmp/lab.pkt", {
+    "PC_TPK": {"ssid": "TPK", "auth": "wpa2-psk", "passphrase": "CISCO123",
+               "ip": "192.168.170.10", "mask": "255.255.255.0"},
+})
+# File→Open the .pkt in PT. PC_TPK is associated with AP_TPK + has its
+# static IP. ping from another host on the same L2 returns 0% loss.
 ```
 
 ### Workflow — IP phone registers with CME
